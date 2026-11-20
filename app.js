@@ -69,7 +69,7 @@ function planoInicial() {
     ex('Barra fixa ou puxada', 'Costas', 3, 6, 10, 120),
     ex('Remada unilateral', 'Costas', 3, 10, 12, 90),
     ex('Elevação lateral na polia', 'Ombros', 3, 12, 15, 60),
-    ex('Rosca alternada', 'Bíceps', 3, 10, 12, 60),
+    ex('Rosca simultânea sentado', 'Bíceps', 3, 10, 12, 60),
     ex('Tríceps testa', 'Tríceps', 3, 10, 12, 60)
   ]};
   const inferiores = { id: 'inferiores', name: 'Inferiores e abdômen', exercises: [
@@ -94,7 +94,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 5;
+const PLAN_VERSION = 6;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -126,6 +126,7 @@ const VIDEOS_INTERNET = {
   'Remada unilateral': 'VoGNKTI5wG8',
   'Elevação lateral na polia': 'BH9jVp2cx3w',
   'Rosca alternada': 'pdzDa9CwJ2Y',
+  'Rosca simultânea sentado': 'ZyyKajRggvM',
   'Tríceps testa': 'gZ2gzw7lLQk',
   'Agachamento búlgaro': 'a3-bQbTdA_0',
   'Cadeira extensora': '--p0Ff7R-Io',
@@ -175,6 +176,15 @@ function applyRemadasV5(st) {
   st.planVersion = 5;
   return st;
 }
+
+function applyRoscaV6(st) {
+  swapExercises(st, { 'Rosca alternada': 'Rosca simultânea sentado' }, 'rosca');
+  st.workouts.forEach(w => w.exercises.forEach(e => {
+    if (e.name === 'Rosca simultânea sentado' && !e.notes) e.notes = 'Registre o peso de cada halter.';
+  }));
+  st.planVersion = 6;
+  return st;
+}
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
 function applyPlanV2(st) {
   st.workouts.forEach(w => {
@@ -203,10 +213,11 @@ function load() {
       if ((st.planVersion || 1) === 2) applyVideosV3(st);
       if ((st.planVersion || 1) === 3 && !st.active) applySupinoV4(st);
       if ((st.planVersion || 1) === 4 && !st.active) applyRemadasV5(st);
+      if ((st.planVersion || 1) === 5 && !st.active) applyRoscaV6(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))));
+  return applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -1297,7 +1308,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))));
+        state = applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))));
         state.logs = logs;
         save(); render();
       }
