@@ -1,4 +1,4 @@
-const CACHE = 'treino-v1';
+const CACHE = 'treino-v2';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg'];
 
 self.addEventListener('install', e => {
@@ -14,6 +14,8 @@ self.addEventListener('activate', e => {
 // Rede primeiro, cache como reserva: atualizações chegam e o app funciona offline na academia.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  // Vídeos não entram no cache do app: são grandes e usam requisições parciais.
+  if (e.request.headers.has('range') || e.request.destination === 'video' || e.request.url.includes('/videos/')) return;
   e.respondWith(
     fetch(e.request)
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })

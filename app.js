@@ -11,6 +11,26 @@ const GRUPOS = [
 // Faixa semanal de séries por grupo muscular usada como referência para hipertrofia.
 const SERIES_MIN = 10;
 const SERIES_MAX = 20;
+// Com foco no mês: grupos em foco ganham 1 série por exercício e vão para o início do treino.
+const FOCO_MIN = 12;
+const MANUT_MIN = 6;
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+// up: maior é melhor para ganho de massa. down: menor é melhor.
+const MEDIDAS = [
+  { key: 'peso', label: 'Peso', unit: 'kg', dir: 'up' },
+  { key: 'gordura', label: 'Gordura corporal', unit: '%', dir: 'down' },
+  { key: 'ombros', label: 'Ombros', unit: 'cm', dir: 'up' },
+  { key: 'peitoral', label: 'Peitoral', unit: 'cm', dir: 'up' },
+  { key: 'cintura', label: 'Cintura', unit: 'cm', dir: 'down' },
+  { key: 'abdomen', label: 'Abdômen', unit: 'cm', dir: 'down' },
+  { key: 'quadril', label: 'Quadril', unit: 'cm', dir: 'up' },
+  { key: 'bracoD', label: 'Braço direito', unit: 'cm', dir: 'up' },
+  { key: 'bracoE', label: 'Braço esquerdo', unit: 'cm', dir: 'up' },
+  { key: 'antebraco', label: 'Antebraço', unit: 'cm', dir: 'up' },
+  { key: 'coxaD', label: 'Coxa direita', unit: 'cm', dir: 'up' },
+  { key: 'coxaE', label: 'Coxa esquerda', unit: 'cm', dir: 'up' },
+  { key: 'panturrilha', label: 'Panturrilha', unit: 'cm', dir: 'up' }
+];
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const ex = (name, muscle, sets, repMin, repMax, rest) =>
@@ -66,7 +86,9 @@ function planoInicial() {
     workouts: [empurrar, puxar, pernas, superiores, inferiores],
     schedule: { 0: null, 1: 'empurrar', 2: 'puxar', 3: 'pernas', 4: null, 5: 'superiores', 6: 'inferiores' },
     logs: [],
-    active: null
+    active: null,
+    focus: {},
+    measures: []
   };
 }
 
@@ -79,7 +101,7 @@ let viewWorkoutId = null; // treino escolhido manualmente na aba Hoje
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { focus: {}, measures: [], ...JSON.parse(raw) };
   } catch (e) { /* segue com o plano inicial */ }
   return planoInicial();
 }
@@ -100,6 +122,13 @@ const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const monthKey = (iso = todayISO()) => iso.slice(0, 7);
+const monthLabel = key => { const [y, m] = key.split('-'); return `${MESES[Number(m) - 1]} de ${y}`; };
+const focusNow = () => state.focus[monthKey()] || [];
+const isFocus = e => focusNow().includes(e.muscle);
+const effSets = e => isFocus(e) ? Math.min(Number(e.sets) + 1, 6) : Number(e.sets);
+// Grupos em foco primeiro: o músculo trabalhado no início da sessão rende mais.
+const ordered = w => [...w.exercises].sort((a, b) => isFocus(b) - isFocus(a));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtDate = iso => {
@@ -157,7 +186,7 @@ function lastPerformance(exId) {
 // Dupla progressão: bateu o topo da faixa em todas as séries, sobe a carga.
 function suggestion(exercise, last) {
   if (!last) return { type: 'keep', text: 'Primeira vez: escolha uma carga que deixe 1 a 2 repetições na reserva.' };
-  const allTop = last.sets.length >= exercise.sets && last.sets.every(s => num(s.reps) >= exercise.repMax);
+  const allTop = last.sets.length >= Number(exercise.sets) && last.sets.every(s => num(s.reps) >= exercise.repMax);
   const maxKg = Math.max(...last.sets.map(s => num(s.kg)));
   if (allTop && maxKg > 0) {
     const inc = maxKg < 20 ? 1 : 2.5;
@@ -173,12 +202,12 @@ function startSession(workoutId) {
   if (!w) return;
   state.active = {
     workoutId, date: todayISO(), startedAt: Date.now(),
-    entries: w.exercises.map(e => {
+    entries: ordered(w).map(e => {
       const last = lastPerformance(e.id);
       const sug = suggestion(e, last);
       return {
         exId: e.id,
-        sets: Array.from({ length: e.sets }, (_, i) => ({
+        sets: Array.from({ length: effSets(e) }, (_, i) => ({
           kg: sug.kg ?? (last?.sets[i]?.kg ?? last?.sets.at(-1)?.kg ?? ''),
           reps: '', done: false
         }))
@@ -264,7 +293,7 @@ const setHeader = (t, s = '') => {
 
 function render() {
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  ({ hoje: renderHoje, semana: renderSemana, treinos: renderTreinos, historico: renderHistorico })[tab]();
+  ({ hoje: renderHoje, semana: renderSemana, treinos: renderTreinos, medidas: renderMedidas, historico: renderHistorico })[tab]();
 }
 
 function workoutOptions(selected, withRest) {
@@ -295,14 +324,16 @@ function renderHoje() {
     return;
   }
 
-  const totalSets = w.exercises.reduce((a, e) => a + Number(e.sets), 0);
+  const totalSets = w.exercises.reduce((a, e) => a + effSets(e), 0);
+  const foco = focusNow();
+  if (foco.length) html += `<div class="hint up">Foco de ${MESES[new Date().getMonth()]}: ${foco.join(', ')}. Esses exercícios vêm primeiro e ganham 1 série.</div>`;
   html += `<button class="btn primary block" data-action="start" data-id="${w.id}">Iniciar treino (${w.exercises.length} exercícios, ${totalSets} séries)</button><div style="height:12px"></div>`;
-  html += w.exercises.map(e => {
+  html += ordered(w).map(e => {
     const last = lastPerformance(e.id);
     return `<div class="card">
       <div class="row between">
-        <div class="grow"><h3>${esc(e.name)}</h3>
-          <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax} · ${e.rest}s</div></div>
+        <div class="grow"><h3>${esc(e.name)} ${isFocus(e) ? '<span class="tag ok">foco</span>' : ''}</h3>
+          <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin}–${e.repMax} · ${e.rest}s</div></div>
         ${videoButton(e)}
       </div>
       ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => `${s.kg || 0}kg×${s.reps || 0}`).join(', ')}</div>` : ''}
@@ -313,8 +344,8 @@ function renderHoje() {
 
 function videoButton(e) {
   return (e.hasVideo || e.videoUrl)
-    ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ Vídeo</button>`
-    : '';
+    ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Vídeo</button>`
+    : `<button class="btn small" data-action="edit-ex" data-id="${e.id}">+ Vídeo</button>`;
 }
 
 function renderSessao() {
@@ -339,7 +370,7 @@ function renderSessao() {
     const complete = en.sets.every(s => s.done);
     return `<div class="card">
       <div class="row between">
-        <div class="grow"><h3>${esc(e.name)} ${complete ? '<span class="tag ok">feito</span>' : ''}</h3>
+        <div class="grow"><h3>${esc(e.name)} ${isFocus(e) ? '<span class="tag ok">foco</span>' : ''} ${complete ? '<span class="tag ok">feito</span>' : ''}</h3>
           <div class="muted">${esc(e.muscle)} · alvo ${e.repMin}–${e.repMax} reps · descanso ${e.rest}s</div></div>
         ${videoButton(e)}
       </div>
@@ -372,7 +403,7 @@ function weeklyVolume() {
   const vol = Object.fromEntries(GRUPOS.map(g => [g, 0]));
   Object.values(state.schedule).forEach(wid => {
     const w = getWorkout(wid);
-    if (w) w.exercises.forEach(e => { vol[e.muscle] = (vol[e.muscle] || 0) + Number(e.sets); });
+    if (w) w.exercises.forEach(e => { vol[e.muscle] = (vol[e.muscle] || 0) + effSets(e); });
   });
   return vol;
 }
@@ -386,13 +417,31 @@ function renderSemana() {
       <select class="field" style="max-width:62%" data-action="schedule" data-day="${d}">${workoutOptions(state.schedule[d], true)}</select>
     </div>`).join('') + `</div>`;
 
+  const foco = focusNow();
+  const mk = monthKey();
+  const past = Object.keys(state.focus).filter(k => k !== mk && state.focus[k].length).sort().reverse();
+  const focusCard = `<div class="card"><h3>Foco de ${monthLabel(mk)}</h3>
+    <div class="muted">Escolha 1 a 3 grupos para priorizar. Eles ganham 1 série por exercício e abrem o treino. Os demais seguem com as séries atuais e a mesma carga, o que preserva o que você já ganhou.</div>
+    <div class="chips">${GRUPOS.map(g => `<button class="chip ${foco.includes(g) ? 'on' : ''}" data-action="toggle-focus" data-g="${g}">${g}</button>`).join('')}</div>
+    ${foco.length > 3 ? '<div class="hint keep">Mais de 3 grupos em foco dilui o efeito. Prefira 2 ou 3.</div>' : ''}
+    ${past.length ? `<div class="muted" style="margin-top:10px">Meses anteriores: ${past.slice(0, 6).map(k => `${monthLabel(k)}: ${state.focus[k].join(', ')}`).join(' · ')}</div>` : ''}
+  </div>`;
+  html = focusCard + html;
+
   const vol = weeklyVolume();
+  const ref = foco.length
+    ? `Grupos em foco: ${FOCO_MIN} a ${SERIES_MAX + 2} séries. Demais grupos: mínimo de ${MANUT_MIN} séries para manutenção.`
+    : `Referência para hipertrofia: ${SERIES_MIN} a ${SERIES_MAX} séries semanais por grupo.`;
   html += `<div class="card"><h3>Séries por grupo muscular na semana</h3>
-    <div class="muted" style="margin-bottom:8px">Referência para hipertrofia: ${SERIES_MIN} a ${SERIES_MAX} séries semanais por grupo.</div>` +
+    <div class="muted" style="margin-bottom:8px">${ref}</div>` +
     GRUPOS.map(g => {
       const v = vol[g] || 0;
-      const color = v === 0 ? 'var(--line)' : v < SERIES_MIN ? 'var(--warn)' : v > SERIES_MAX ? 'var(--danger)' : 'var(--accent)';
-      const tag = v === 0 ? '' : v < SERIES_MIN ? '<span class="tag warn">abaixo</span>' : v > SERIES_MAX ? '<span class="tag warn">acima</span>' : '<span class="tag ok">ok</span>';
+      const f = foco.includes(g);
+      const min = !foco.length ? SERIES_MIN : f ? FOCO_MIN : MANUT_MIN;
+      const max = f ? SERIES_MAX + 2 : SERIES_MAX;
+      const color = v === 0 ? 'var(--line)' : v < min ? 'var(--warn)' : v > max ? 'var(--danger)' : 'var(--accent)';
+      const okLabel = !foco.length ? 'ok' : f ? 'foco' : 'manutenção';
+      const tag = v === 0 ? '' : v < min ? '<span class="tag warn">abaixo</span>' : v > max ? '<span class="tag warn">acima</span>' : `<span class="tag ok">${okLabel}</span>`;
       return `<div style="margin:8px 0">
         <div class="row between"><span>${g}</span><span class="muted">${v} séries ${tag}</span></div>
         <div class="bar"><div style="width:${Math.min(v / 25, 1) * 100}%;background:${color}"></div></div>
@@ -403,7 +452,14 @@ function renderSemana() {
 
 function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
-  let html = state.workouts.map(w => `<div class="card">
+  const allEx = state.workouts.flatMap(w => w.exercises);
+  const withVideo = allEx.filter(e => e.hasVideo || e.videoUrl).length;
+  let html = `<div class="card"><h3>Vídeos dos exercícios</h3>
+    <div class="muted">${withVideo} de ${allEx.length} exercícios com vídeo. Envie vários de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
+    <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar vídeos do celular
+      <input type="file" accept="video/*" multiple data-action="bulk-videos" hidden></label>
+  </div>`;
+  html += state.workouts.map(w => `<div class="card">
     <div class="row between">
       <input class="field grow" value="${esc(w.name)}" data-action="rename-workout" data-id="${w.id}">
       <button class="btn small danger" data-action="delete-workout" data-id="${w.id}">Excluir</button>
@@ -462,6 +518,147 @@ function renderHistorico() {
   view.innerHTML = html;
 }
 
+/* ================= Medidas ================= */
+
+// Uma medida por mês: vale o último registro de cada mês.
+function monthlyMeasures() {
+  const byMonth = {};
+  [...state.measures].sort((a, b) => a.date.localeCompare(b.date)).forEach(m => {
+    const k = monthKey(m.date);
+    byMonth[k] = { date: m.date, values: { ...(byMonth[k]?.values || {}), ...m.values } };
+  });
+  return Object.keys(byMonth).sort().map(k => ({ month: k, ...byMonth[k] }));
+}
+
+function sparkline(vals) {
+  if (vals.length < 2) return '';
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${28 - ((v - min) / span) * 24}`).join(' ');
+  return `<svg viewBox="0 0 100 30" preserveAspectRatio="none" class="spark"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function delta(m, cur, prev) {
+  if (prev == null) return '';
+  const d = Math.round((cur - prev) * 10) / 10;
+  if (d === 0) return '<span class="muted">=</span>';
+  const good = (d > 0) === (m.dir === 'up');
+  return `<span style="color:${good ? 'var(--accent)' : 'var(--warn)'}">${d > 0 ? '+' : ''}${String(d).replace('.', ',')} ${m.unit}</span>`;
+}
+
+function renderMedidas() {
+  setHeader('Medidas', 'Evolução mês a mês');
+  const months = monthlyMeasures();
+  const mk = monthKey();
+  const hasThisMonth = months.some(m => m.month === mk);
+  let html = `<div class="card">
+    ${hasThisMonth
+      ? `<div class="muted">Medidas de ${monthLabel(mk)} registradas.</div>`
+      : `<div class="hint keep">Você ainda não registrou as medidas de ${monthLabel(mk)}.</div>`}
+    <button class="btn primary block" style="margin-top:8px" data-action="new-measure">Registrar medidas</button>
+    <div class="muted" style="margin-top:8px">Meça sempre no mesmo horário, em jejum, com a fita sem apertar a pele.</div>
+  </div>`;
+
+  if (!months.length) {
+    view.innerHTML = html + `<div class="card empty">Registre suas primeiras medidas para acompanhar a evolução.</div>`;
+    return;
+  }
+
+  html += `<div class="card"><h3>Evolução</h3><div class="muted" style="margin-bottom:6px">Atual · vs mês anterior · vs início (${monthLabel(months[0].month)})</div>` +
+    MEDIDAS.map(m => {
+      const series = months.filter(x => x.values[m.key] != null && x.values[m.key] !== '').map(x => num(x.values[m.key]));
+      if (!series.length) return '';
+      const cur = series.at(-1);
+      return `<div class="list-item">
+        <div class="grow"><div>${m.label}</div>
+          <div class="muted">${String(cur).replace('.', ',')} ${m.unit} · ${delta(m, cur, series.length > 1 ? series.at(-2) : null) || '—'} · ${delta(m, cur, series.length > 1 ? series[0] : null) || '—'}</div></div>
+        <div style="width:90px">${sparkline(series)}</div>
+      </div>`;
+    }).join('') + `</div>`;
+
+  html += `<div class="card"><h3>Registros</h3>` + [...state.measures].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+    const foco = state.focus[monthKey(r.date)];
+    return `<details class="list-item" style="display:block">
+      <summary class="row between" style="cursor:pointer"><span>${fmtDate(r.date)}</span><span class="muted">${Object.keys(r.values).length} medidas</span></summary>
+      ${foco?.length ? `<div class="muted">Foco do mês: ${foco.join(', ')}</div>` : ''}
+      <div class="muted" style="margin:6px 0">${MEDIDAS.filter(m => r.values[m.key] != null).map(m => `${m.label}: ${String(r.values[m.key]).replace('.', ',')} ${m.unit}`).join(' · ')}</div>
+      <div class="row"><button class="btn small" data-action="edit-measure" data-id="${r.id}">Editar</button>
+      <button class="btn small danger" data-action="delete-measure" data-id="${r.id}">Apagar</button></div>
+    </details>`;
+  }).join('') + `</div>`;
+  view.innerHTML = html;
+}
+
+function editMeasure(id) {
+  const rec = id ? state.measures.find(m => m.id === id) : null;
+  const months = monthlyMeasures();
+  const last = months.at(-1)?.values || {};
+  openModal(`<h3>${rec ? 'Editar medidas' : 'Registrar medidas'}</h3>
+    <form id="m-form">
+      <label>Data</label>
+      <input class="field" type="date" name="date" value="${rec ? rec.date : todayISO()}" required>
+      <div class="grid-2">${MEDIDAS.map(m => `<div><label>${m.label} (${m.unit})</label>
+        <input class="field" name="${m.key}" inputmode="decimal" value="${esc(rec?.values[m.key] ?? '')}" placeholder="${last[m.key] != null ? 'último: ' + String(last[m.key]).replace('.', ',') : ''}"></div>`).join('')}</div>
+      <button class="btn primary block" style="margin-top:14px" type="submit">Salvar</button>
+    </form>`);
+  document.getElementById('m-form').onsubmit = ev => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const values = {};
+    MEDIDAS.forEach(m => { const v = String(f.get(m.key)).trim(); if (v) values[m.key] = num(v); });
+    if (!Object.keys(values).length) { alert('Preencha ao menos uma medida.'); return; }
+    if (rec) Object.assign(rec, { date: f.get('date'), values });
+    else state.measures.push({ id: uid(), date: f.get('date'), values });
+    save(); closeModal(); render();
+  };
+}
+
+/* ================= Vídeos em lote ================= */
+
+const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+function bestMatch(fileName, list) {
+  const words = new Set(norm(fileName).split(' ').filter(w => w.length > 2));
+  let best = null, bestScore = 0;
+  list.forEach(e => {
+    const ew = norm(e.name).split(' ').filter(w => w.length > 2);
+    if (!ew.length) return;
+    const hits = ew.filter(w => words.has(w)).length;
+    const score = hits / ew.length + (e.hasVideo || e.videoUrl ? 0 : 0.01);
+    if (hits && score > bestScore) { best = e; bestScore = score; }
+  });
+  return best;
+}
+
+let pendingFiles = [];
+function bulkVideos(files) {
+  pendingFiles = [...files];
+  const list = state.workouts.flatMap(w => w.exercises.map(e => ({ ...e, wname: w.name })));
+  const opts = sel => `<option value="">Não usar</option>` + list.map(e =>
+    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${e.hasVideo || e.videoUrl ? ' ✓' : ''}</option>`).join('');
+  openModal(`<h3>Ligar vídeos aos exercícios</h3>
+    <div class="muted">Confira cada vídeo. ✓ indica exercício que já tem vídeo (será substituído).</div>
+    ${pendingFiles.map((f, i) => `<label>${esc(f.name)} <span class="muted">(${Math.round(f.size / 1048576)} MB)</span></label>
+      <select class="field" data-bulk="${i}">${opts(bestMatch(f.name, list)?.id)}</select>`).join('')}
+    <button class="btn primary block" style="margin-top:14px" data-action="save-bulk">Salvar vídeos</button>`);
+}
+
+async function saveBulk(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  let ok = 0;
+  for (const sel of document.querySelectorAll('[data-bulk]')) {
+    if (!sel.value) continue;
+    const e = findExercise(sel.value)?.exercise;
+    if (!e) continue;
+    try { await videoDB.put(e.id, pendingFiles[sel.dataset.bulk]); e.hasVideo = true; ok++; }
+    catch (err) { alert(`Não consegui salvar ${pendingFiles[sel.dataset.bulk].name}. O aparelho pode estar sem espaço.`); break; }
+  }
+  pendingFiles = [];
+  save(); closeModal(); render();
+  if (ok) alert(`${ok} vídeo(s) salvo(s).`);
+}
+
 /* ================= Modais ================= */
 
 const modal = document.getElementById('modal');
@@ -518,8 +715,8 @@ function editExercise(exId, workoutId) {
       <label>Vídeo do aparelho ${e.hasVideo ? '<span class="tag ok">salvo</span>' : ''}</label>
       <input class="field" name="file" type="file" accept="video/*">
       ${e.hasVideo ? `<button type="button" class="btn small danger" style="margin-top:6px" data-action="remove-video" data-id="${e.id}">Remover vídeo salvo</button>` : ''}
-      <label>Ou link do vídeo (YouTube, Google Drive, etc.)</label>
-      <input class="field" name="videoUrl" type="url" placeholder="https://" value="${esc(e.videoUrl)}">
+      <label>Ou link do vídeo (YouTube, Google Drive ou videos/arquivo.mp4 do repositório)</label>
+      <input class="field" name="videoUrl" type="text" inputmode="url" placeholder="https://" value="${esc(e.videoUrl)}">
       <label>Observações de execução</label>
       <textarea class="field" name="notes" rows="2">${esc(e.notes)}</textarea>
       <div class="row" style="margin-top:14px">
@@ -603,6 +800,20 @@ document.addEventListener('click', async ev => {
     case 'cancel-session':
       if (confirm('Cancelar o treino? As séries marcadas serão perdidas.')) { state.active = null; save(); stopTimer(); render(); }
       break;
+    case 'toggle-focus': {
+      const mk = monthKey();
+      const cur = new Set(state.focus[mk] || []);
+      cur.has(t.dataset.g) ? cur.delete(t.dataset.g) : cur.add(t.dataset.g);
+      state.focus[mk] = GRUPOS.filter(g => cur.has(g));
+      save(); { const y = window.scrollY; render(); window.scrollTo(0, y); }
+      break;
+    }
+    case 'new-measure': editMeasure(null); break;
+    case 'edit-measure': editMeasure(id); break;
+    case 'delete-measure':
+      if (confirm('Apagar este registro de medidas?')) { state.measures = state.measures.filter(m => m.id !== id); save(); render(); }
+      break;
+    case 'save-bulk': saveBulk(t); break;
     case 'timer-add': timerEnd += 15000; beeped = false; tickTimer(); break;
     case 'timer-stop': stopTimer(); break;
     case 'play': playVideo(id); break;
@@ -682,13 +893,17 @@ document.addEventListener('change', ev => {
     case 'pick-workout': viewWorkoutId = t.value || null; render(); break;
     case 'schedule': state.schedule[t.dataset.day] = t.value || null; save(); render(); break;
     case 'rename-workout': getWorkout(t.dataset.id).name = t.value.trim() || 'Treino'; save(); break;
+    case 'bulk-videos':
+      if (t.files.length) bulkVideos(t.files);
+      t.value = '';
+      break;
     case 'import': {
       const file = t.files[0];
       if (!file) break;
       file.text().then(txt => {
         const data = JSON.parse(txt);
         if (!Array.isArray(data.workouts) || !data.schedule) throw new Error();
-        state = { logs: [], active: null, ...data };
+        state = { logs: [], active: null, focus: {}, measures: [], ...data };
         save(); render();
         alert('Backup importado.');
       }).catch(() => alert('Arquivo de backup inválido.'));
@@ -703,3 +918,5 @@ render();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+// Pede ao navegador para não apagar os vídeos salvos quando faltar espaço.
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
