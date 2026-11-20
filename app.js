@@ -94,7 +94,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 6;
+const PLAN_VERSION = 7;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -185,6 +185,48 @@ function applyRoscaV6(st) {
   st.planVersion = 6;
   return st;
 }
+
+// Semana de 6 dias (segunda a sábado) e domingo opcional. Cada grupo continua com 2 estímulos por semana,
+// com pelo menos 48 h entre eles. O sábado reforça ombros e braços, que estavam abaixo de 10 séries.
+const SEMANA_ANTIGA = { 0: null, 1: 'empurrar', 2: 'puxar', 3: 'pernas', 4: null, 5: 'superiores', 6: 'inferiores' };
+function exV7(name, muscle, extra = {}) {
+  const id = VIDEOS_INTERNET[name];
+  return { ...ex(name, muscle, 3, 6, 10, 90), videoUrl: id ? `https://www.youtube.com/watch?v=${id}` : '', ...extra };
+}
+function applySemanaV7(st) {
+  if (!st.workouts.some(w => w.id === 'ombros-bracos')) st.workouts.push({ id: 'ombros-bracos', name: 'Ombros e braços', exercises: [
+    exV7('Desenvolvimento com halteres', 'Ombros', { notes: 'Registre o peso de cada halter.' }),
+    exV7('Elevação lateral', 'Ombros'),
+    exV7('Rosca direta', 'Bíceps'),
+    exV7('Rosca martelo', 'Bíceps'),
+    exV7('Tríceps na polia', 'Tríceps'),
+    exV7('Tríceps francês', 'Tríceps')
+  ]});
+  if (!st.workouts.some(w => w.id === 'domingo')) st.workouts.push({ id: 'domingo', name: 'Domingo opcional: abdômen e panturrilhas', exercises: [
+    exV7('Abdominal na máquina', 'Abdômen', { sets: 5, repMin: 60, repMax: 60, rest: 60, bodyweight: true }),
+    exV7('Panturrilha em pé', 'Panturrilhas'),
+    exV7('Panturrilha sentado', 'Panturrilhas')
+  ]});
+  const same = Object.keys(SEMANA_ANTIGA).every(d => (st.schedule[d] ?? null) === SEMANA_ANTIGA[d]);
+  if (same) st.schedule = { 0: null, 1: 'empurrar', 2: 'puxar', 3: 'pernas', 4: 'superiores', 5: 'inferiores', 6: 'ombros-bracos' };
+  st.optional = { 0: 'domingo', ...(st.optional || {}) };
+  st.planVersion = 7;
+  return st;
+}
+
+// Exercício repetido em outro dia (mesmo nome) usa o seu vídeo, se ele ainda não tiver um.
+async function shareOwnVideos() {
+  const all = state.workouts.flatMap(w => w.exercises);
+  let changed = false;
+  for (const e of all.filter(x => !x.hasVideo)) {
+    const twin = all.find(x => x.hasVideo && norm(x.name) === norm(e.name));
+    if (!twin) continue;
+    const blob = await videoDB.get(twin.id).catch(() => null);
+    if (!blob) continue;
+    try { await videoDB.put(e.id, blob); e.hasVideo = true; changed = true; } catch (err) { break; }
+  }
+  if (changed) { save(); render(); }
+}
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
 function applyPlanV2(st) {
   st.workouts.forEach(w => {
@@ -214,10 +256,11 @@ function load() {
       if ((st.planVersion || 1) === 3 && !st.active) applySupinoV4(st);
       if ((st.planVersion || 1) === 4 && !st.active) applyRemadasV5(st);
       if ((st.planVersion || 1) === 5 && !st.active) applyRoscaV6(st);
+      if ((st.planVersion || 1) === 6) applySemanaV7(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))));
+  return applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -464,6 +507,12 @@ function renderHoje() {
     <select class="field" data-action="pick-workout">${workoutOptions(wid, true)}</select>
   </div>`;
 
+  const opt = getWorkout(state.optional?.[dow]);
+  if (!w && opt) {
+    html += `<div class="card"><h3>Treino opcional</h3>
+      <div class="muted">Hoje é descanso. Se quiser treinar, faça ${esc(opt.name.split(':').pop().trim())}: não atrapalha a recuperação dos grupos da semana.</div>
+      <button class="btn block" style="margin-top:10px" data-action="start" data-id="${opt.id}">Iniciar treino opcional</button></div>`;
+  }
   if (!w) {
     html += `<div class="card empty">Dia de descanso. O músculo cresce na recuperação: durma bem e bata sua meta de proteína.</div>`;
     view.innerHTML = html;
@@ -598,6 +647,26 @@ function renderSemana() {
   view.innerHTML = html;
 }
 
+// Exercícios sem vídeo seu, agrupados pelo primeiro dia da semana em que aparecem.
+function renderToRecord() {
+  const done = new Set(state.workouts.flatMap(w => w.exercises).filter(e => e.hasVideo).map(e => norm(e.name)));
+  const seen = new Set();
+  const days = [1, 2, 3, 4, 5, 6, 0];
+  const groups = days.map(d => {
+    const w = getWorkout(state.schedule[d]) || (d === 0 ? getWorkout(state.optional?.[0]) : null);
+    if (!w) return null;
+    const items = w.exercises.filter(e => { const k = norm(e.name); if (done.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+    return items.length ? { d, w, items } : null;
+  }).filter(Boolean);
+  const total = groups.reduce((a, g) => a + g.items.length, 0);
+  if (!total) return '<div class="hint up" style="margin-top:10px">Todos os exercícios têm vídeo seu.</div>';
+  return `<details style="margin-top:10px"><summary style="cursor:pointer"><strong>Falta gravar: ${total} exercício(s)</strong></summary>
+    <div class="muted" style="margin:6px 0">Cada exercício aparece no primeiro dia da semana em que você o faz. Um vídeo serve para todos os dias.</div>
+    ${groups.map(g => `<div style="margin-top:8px"><strong>${DIAS[g.d]}${g.d === 0 ? ' (opcional)' : ''}</strong> <span class="muted">· ${esc(g.w.name)}</span>
+      <div class="muted">${g.items.map(e => esc(e.name)).join(' · ')}</div></div>`).join('')}
+  </details>`;
+}
+
 function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
   const allEx = state.workouts.flatMap(w => w.exercises);
@@ -608,6 +677,7 @@ function renderTreinos() {
     <div class="muted" style="margin-top:6px">Envie seus vídeos de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
     <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar meus vídeos
       <input type="file" accept="video/*" multiple data-action="bulk-videos" hidden></label>
+    ${renderToRecord()}
   </div>
   <div class="card"><h3>Vídeo longo da galeria</h3>
     <div class="muted">Para gravações de tela com vários exercícios. Envie o vídeo uma vez e marque o início e o fim de cada exercício. O app toca só o trecho, em repetição.</div>
@@ -1308,7 +1378,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))));
+        state = applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))));
         state.logs = logs;
         save(); render();
       }
@@ -1359,5 +1429,6 @@ render();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+shareOwnVideos();
 // Pede ao navegador para não apagar os vídeos salvos quando faltar espaço.
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
