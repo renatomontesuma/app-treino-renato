@@ -1666,8 +1666,32 @@ document.addEventListener('change', ev => {
 /* ================= Início ================= */
 
 render();
+// Atualização automática. No iPhone o app volta do segundo plano sem recarregar, então
+// procura versão nova sempre que reaparece na tela. Com versão nova, recarrega sozinho;
+// durante um treino, só avisa, para não interromper o timer.
+function showUpdateBanner() {
+  if (document.getElementById('update-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'update-banner';
+  b.innerHTML = `<span>Nova versão do app disponível.</span><button class="btn small primary" type="button">Atualizar</button>`;
+  b.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(b);
+}
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return; // primeira instalação: nada a recarregar
+    if (state.active) { showUpdateBanner(); return; }
+    reloading = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    window.addEventListener('pageshow', check);
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {});
 }
 shareOwnVideos();
 // Pede ao navegador para não apagar os vídeos salvos quando faltar espaço.

@@ -1,8 +1,14 @@
-const CACHE = 'treino-v17';
+const CACHE = 'treino-v18';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg'];
 
+// Pede sempre ao servidor se o arquivo mudou. Sem isso, o celular reaproveita a versão
+// antiga por até 10 minutos (cache do GitHub Pages).
+const fresh = req => req.mode === 'navigate'
+  ? new Request(req.url, { cache: 'no-cache' })
+  : new Request(req, { cache: 'no-cache' });
+
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'no-cache' })))));
   self.skipWaiting();
 });
 
@@ -17,7 +23,7 @@ self.addEventListener('fetch', e => {
   // Vídeos não entram no cache do app: são grandes e usam requisições parciais.
   if (e.request.headers.has('range') || e.request.destination === 'video' || e.request.url.includes('/videos/')) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(fresh(e.request))
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })
       .catch(() => caches.match(e.request))
   );
