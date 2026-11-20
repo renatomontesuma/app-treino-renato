@@ -94,7 +94,53 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 2;
+const PLAN_VERSION = 3;
+
+// Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
+const VIDEOS_INTERNET = {
+  'Supino reto com barra': 'TukK2WRI4C4',
+  'Supino inclinado com halteres': 'G-i3jMIbDmo',
+  'Desenvolvimento com halteres': 'IDOZyXHq7aI',
+  'Elevação lateral': 'gURBTU9VSJg',
+  'Tríceps na polia': 'Npv_xl76XWM',
+  'Tríceps francês': 'o_mAVpMIBJs',
+  'Puxada frontal': 'BOW9my4J_ek',
+  'Remada curvada': 's4jeKLRghTM',
+  'Remada baixa': '2YebbYuuBJQ',
+  'Crucifixo inverso': 'r1efeCcUW-8',
+  'Encolhimento': 'BrwUPSLC_hE',
+  'Rosca direta': '85f7ODu2ztA',
+  'Rosca martelo': 'pTyVDap5HaI',
+  'Agachamento livre': 'rM6SDUdl9fs',
+  'Leg press': 'itJDw9I1qu4',
+  'Stiff': 'BHfY5-jGNDA',
+  'Mesa flexora': '8Nat6GRiEoc',
+  'Elevação pélvica': 'kvmT_ZlgVI0',
+  'Panturrilha em pé': 'bZLNCtGI418',
+  'Supino inclinado com barra': '7lm16JD0S08',
+  'Crucifixo na polia': 'ifwx2iuv4kA',
+  'Barra fixa ou puxada': '_wH1BwSL_qg',
+  'Remada unilateral': 'VoGNKTI5wG8',
+  'Elevação lateral na polia': 'BH9jVp2cx3w',
+  'Rosca alternada': 'pdzDa9CwJ2Y',
+  'Tríceps testa': 'gZ2gzw7lLQk',
+  'Agachamento búlgaro': 'a3-bQbTdA_0',
+  'Cadeira extensora': '--p0Ff7R-Io',
+  'Levantamento terra romeno': '3YmW6SEkat0',
+  'Cadeira flexora': 'E59lnzU_LE4',
+  'Abdução de quadril': '50qHGus1TZk',
+  'Panturrilha sentado': '7hbYg4-NZ74',
+  'Abdominal na máquina': '1l0yf6eWh3Y'
+};
+// Preenche só exercícios sem link. Não troca links que você já colocou.
+function applyVideosV3(st) {
+  st.workouts.forEach(w => w.exercises.forEach(e => {
+    const id = VIDEOS_INTERNET[e.name];
+    if (id && !e.videoUrl) e.videoUrl = `https://www.youtube.com/watch?v=${id}`;
+  }));
+  st.planVersion = 3;
+  return st;
+}
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
 function applyPlanV2(st) {
   st.workouts.forEach(w => {
@@ -120,10 +166,11 @@ function load() {
     if (raw) {
       const st = { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
       if ((st.planVersion || 1) < 2 && !st.active) applyPlanV2(st);
+      if ((st.planVersion || 1) === 2) applyVideosV3(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyPlanV2(planoInicial());
+  return applyVideosV3(applyPlanV2(planoInicial()));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -508,9 +555,11 @@ function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
   const allEx = state.workouts.flatMap(w => w.exercises);
   const withVideo = allEx.filter(hasAnyVideo).length;
+  const own = allEx.filter(e => e.hasVideo).length, pers = allEx.filter(e => e.videoSrc).length, net = allEx.filter(e => e.videoUrl).length;
   let html = `<div class="card"><h3>Vídeos dos exercícios</h3>
-    <div class="muted">${withVideo} de ${allEx.length} exercícios com vídeo. Envie vários de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
-    <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar vídeos do celular
+    <div class="muted">${withVideo} de ${allEx.length} exercícios com vídeo. Seus: ${own} · personal: ${pers} · internet: ${net}.</div>
+    <div class="muted" style="margin-top:6px">Envie seus vídeos de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
+    <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar meus vídeos
       <input type="file" accept="video/*" multiple data-action="bulk-videos" hidden></label>
   </div>
   <div class="card"><h3>Vídeo longo da galeria</h3>
@@ -693,7 +742,7 @@ function bestMatch(fileName, list) {
     const ew = norm(e.name).split(' ').filter(w => w.length > 2);
     if (!ew.length) return;
     const hits = ew.filter(w => words.has(w)).length;
-    const score = hits / ew.length + (hasAnyVideo(e) ? 0 : 0.01);
+    const score = hits / ew.length + (e.hasVideo ? 0 : 0.01);
     if (hits && score > bestScore) { best = e; bestScore = score; }
   });
   return best;
@@ -704,7 +753,7 @@ function bulkVideos(files) {
   pendingFiles = [...files];
   const list = state.workouts.flatMap(w => w.exercises.map(e => ({ ...e, wname: w.name })));
   const opts = sel => `<option value="">Não usar</option>` + list.map(e =>
-    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${hasAnyVideo(e) ? ' ✓' : ''}</option>`).join('');
+    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${e.hasVideo ? ' ✓' : ''}</option>`).join('');
   openModal(`<h3>Ligar vídeos aos exercícios</h3>
     <div class="muted">Confira cada vídeo. ✓ indica exercício que já tem vídeo (será substituído).</div>
     ${pendingFiles.map((f, i) => `<label>${esc(f.name)} <span class="muted">(${Math.round(f.size / 1048576)} MB)</span></label>
@@ -847,17 +896,27 @@ function closeModal() {
   if (wasMarking) render();
 }
 
-async function playVideo(exId) {
+// Fontes de vídeo de um exercício, na ordem de prioridade: seu vídeo, trecho do personal, internet.
+const videoSources = e => [
+  e.hasVideo && { key: 'meu', label: 'Meu vídeo' },
+  e.videoSrc && { key: 'personal', label: 'Personal' },
+  e.videoUrl && { key: 'internet', label: 'Internet' }
+].filter(Boolean);
+
+async function playVideo(exId, which) {
   const found = findExercise(exId);
   if (!found) return;
   const e = found.exercise;
+  if (modalUrl) { URL.revokeObjectURL(modalUrl); modalUrl = null; }
+  const srcs = videoSources(e);
+  const cur = srcs.find(x => x.key === which)?.key || srcs[0]?.key;
   let player = '';
-  if (e.hasVideo) {
-    const blob = await videoDB.get(e.id).catch(() => null);
-    if (blob) { modalUrl = URL.createObjectURL(blob); player = `<video src="${modalUrl}" controls playsinline autoplay></video>`; }
-  }
   let clip = false;
-  if (!player && e.videoSrc) {
+  if (cur === 'meu') {
+    const blob = await videoDB.get(e.id).catch(() => null);
+    if (blob) { modalUrl = URL.createObjectURL(blob); player = `<video src="${modalUrl}" controls playsinline autoplay muted loop></video>`; }
+  }
+  if (cur === 'personal') {
     const blob = await videoDB.get(e.videoSrc).catch(() => null);
     if (blob) {
       modalUrl = URL.createObjectURL(blob);
@@ -866,20 +925,27 @@ async function playVideo(exId) {
       clip = true;
     }
   }
-  if (!player && e.videoUrl) {
+  if (cur === 'internet') {
     const yt = youtubeId(e.videoUrl);
     const host = (e.videoUrl.match(/^https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || 'link';
     player = yt
-      ? `<iframe src="https://www.youtube.com/embed/${yt}?rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+      ? `<iframe src="https://www.youtube.com/embed/${yt}?rel=0&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+         <div class="muted" style="margin-top:6px">Precisa de internet. <a href="https://www.youtube.com/watch?v=${yt}" target="_blank" rel="noopener" style="color:var(--accent)">Abrir no YouTube</a></div>`
       : isVideoFile(e.videoUrl)
         ? `<video src="${esc(e.videoUrl)}" controls playsinline></video>`
         : `<a class="btn primary block" style="text-align:center;text-decoration:none" href="${esc(e.videoUrl)}" target="_blank" rel="noopener">Abrir vídeo ${host.includes('instagram') ? 'no Instagram' : 'em ' + esc(host)}</a>`;
   }
   if (!player) player = `<div class="empty">Vídeo não encontrado neste aparelho. Envie o arquivo de novo em Treinos > Editar.</div>`;
+  const tabs = srcs.length > 1
+    ? `<div class="chips" style="margin:0 0 10px">${srcs.map(x =>
+        `<button class="chip ${x.key === cur ? 'on' : ''}" data-action="play-src" data-id="${e.id}" data-src="${x.key}">${x.label}</button>`).join('')}</div>`
+    : '';
   openModal(`<h3 style="margin-right:30px">${esc(e.name)}</h3>
-    <div class="muted" style="margin-bottom:10px">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax}</div>
+    <div class="muted" style="margin-bottom:10px">${esc(e.muscle)} · ${e.sets} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div>
+    ${tabs}
     ${player}
-    ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}`);
+    ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}
+    ${!e.hasVideo ? `<button class="btn small block" style="margin-top:10px" data-action="edit-ex" data-id="${e.id}">+ Enviar meu vídeo deste exercício</button>` : ''}`);
   if (clip) loopClip(document.getElementById('clip'), e.videoStart, e.videoEnd);
 }
 
@@ -933,12 +999,13 @@ function renderMarkerPanel(selected) {
   if (!panel || !mk) return;
   const list = state.workouts.flatMap(w => w.exercises.map(e => ({ e, w })));
   const marked = list.filter(x => x.e.videoSrc === mk.src).sort((a, b) => a.e.videoStart - b.e.videoStart);
-  const sel = selected ?? list.find(x => !hasAnyVideo(x.e))?.e.id ?? list[0]?.e.id;
+  const sel = selected ?? list.find(x => !x.e.videoSrc && !x.e.hasVideo)?.e.id ?? list[0]?.e.id;
   const t = v => v == null ? '--:--' : fmtTime(Math.round(v));
   panel.innerHTML = `
     <label>Exercício</label>
     <select class="field" id="mk-ex">${state.workouts.map(w => `<optgroup label="${esc(w.name)}">${w.exercises.map(e =>
-      `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.name)}${hasAnyVideo(e) ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
+      `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.name)}${e.videoSrc || e.hasVideo ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
+    <div class="muted" style="margin-top:4px">✓ = já tem trecho do personal ou vídeo seu.</div>
     <div class="grid-2" style="margin-top:8px;gap:8px">
       <button class="btn" data-action="mk-start">Início: <strong>${t(mk.start)}</strong></button>
       <button class="btn" data-action="mk-end">Fim: <strong>${t(mk.end)}</strong></button>
@@ -1134,6 +1201,7 @@ document.addEventListener('click', async ev => {
     case 'timer-add': timerEnd += 15000; beeped = false; tickTimer(); break;
     case 'timer-stop': stopTimer(); break;
     case 'play': playVideo(id); break;
+    case 'play-src': playVideo(id, t.dataset.src); break;
     case 'close-modal': closeModal(); break;
     case 'edit-ex': editExercise(id); break;
     case 'new-ex': editExercise(null, t.dataset.w); break;
@@ -1188,7 +1256,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = applyPlanV2(planoInicial());
+        state = applyVideosV3(applyPlanV2(planoInicial()));
         state.logs = logs;
         save(); render();
       }

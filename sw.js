@@ -1,4 +1,4 @@
-const CACHE = 'treino-v5';
+const CACHE = 'treino-v6';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg'];
 
 self.addEventListener('install', e => {
