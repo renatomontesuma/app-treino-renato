@@ -9,7 +9,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 * `index.html`, `style.css`, `app.js`: o app.
 * `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) a cada mudança de arquivo do app.
 * `manifest.json`, `icon.svg`: instalação na tela inicial.
-* Publicação: GitHub Pages a partir do branch `claude/eager-thompson-l53kq5`, pasta raiz. Endereço: renatomontesuma.github.io/app-treino-renato
+* Publicação: GitHub Pages ativo (repositório público) a partir do branch `claude/eager-thompson-l53kq5`, pasta raiz. Endereço: https://renatomontesuma.github.io/app-treino-renato/
 
 ## Onde ficam os dados
 
@@ -87,7 +87,7 @@ Na análise, comentar enquadramento (de lado, corpo inteiro, celular na altura d
 
 * Gravar os 26 exercícios que ainda usam vídeo de exemplo (lista em Treinos > Falta gravar).
 * Glúteos, panturrilhas, abdômen e trapézio abaixo de 10 séries semanais. Avaliar com o usuário.
-* Ativar o GitHub Pages, se ainda não estiver ativo.
+
 
 ## Testes
 
