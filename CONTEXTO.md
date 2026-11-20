@@ -73,6 +73,7 @@ Prioridade no player: vídeo próprio (Meu vídeo) > trecho do vídeo longo do p
 * Envio em lote (Treinos > Enviar meus vídeos) liga cada arquivo ao exercício pelo nome do arquivo e repassa o vídeo aos exercícios de mesmo nome em outros dias.
 * Aba Semana > Exercícios de cada dia: lista completa por dia, com "Meu vídeo", "Exemplo" e "Gravar".
 * Os vídeos do usuário NÃO vão para o Git. O repositório é público e os vídeos mostram o rosto dele e outros alunos. Pasta local: `VÍDEOS RENATO` (fora do Git).
+* `VÍDEOS RENATO` tem uma subpasta por dia (`1 - SEGUNDA (Empurrar)` até `7 - DOMINGO opcional (...)`). Vídeo de exercício que aparece em mais de um dia vai copiado para cada dia. Cada pasta tem `_LISTA DO DIA.txt` com o que está gravado e o que falta (e o nome de arquivo esperado). Ao salvar um vídeo novo, coloque nas pastas certas e atualize as listas. Se o plano mudar de dia, reorganize as pastas.
 
 Vídeos próprios já processados (6): supino-reto-com-halteres, puxada-articulada, remada-cavalinho-apoiada, remada-sentada-articulada, rosca-martelo, rosca-simultanea-sentado. Todos têm exercício com o mesmo nome no app (conferido no plano v8). Regra: o nome do arquivo é o nome do exercício no app, sem acento, em minúsculas e com hífens.
 
