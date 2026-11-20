@@ -99,7 +99,7 @@ function planoInicial() {
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
 const PLAN_VERSION = 11;
 // Mesmo número do cache em sw.js (treino-vN). Aparece no fim da aba Histórico para conferir se o celular atualizou.
-const APP_BUILD = 24;
+const APP_BUILD = 25;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -289,6 +289,13 @@ async function shareOwnVideos() {
     if (!blob) continue;
     try { await videoDB.put(e.id, blob); e.hasVideo = true; changed = true; } catch (err) { break; }
   }
+  for (const e of all.filter(x => !x.hasPersonal)) {
+    const twin = all.find(x => x.hasPersonal && norm(x.name) === norm(e.name));
+    if (!twin) continue;
+    const blob = await videoDB.get(pKey(twin.id)).catch(() => null);
+    if (!blob) continue;
+    try { await videoDB.put(pKey(e.id), blob); e.hasPersonal = true; changed = true; } catch (err) { break; }
+  }
   if (changed) { save(); render(); }
 }
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
@@ -395,7 +402,11 @@ const videoDB = (() => {
   };
 })();
 
-const hasAnyVideo = e => !!(e.hasVideo || e.videoUrl || e.videoSrc);
+const hasAnyVideo = e => !!(e.hasVideo || e.hasPersonal || e.videoUrl || e.videoSrc);
+// Vídeo do personal de um exercício fica no IndexedDB com esta chave (o seu vídeo usa o id puro).
+const pKey = id => 'pe_' + id;
+// Sem vídeo seu, o botão diz de onde vem o exemplo.
+const exLabel = e => (e.hasPersonal || e.videoSrc) ? 'Personal' : 'Exemplo';
 const isVideoFile = url => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url) || url.startsWith('videos/');
 
 function youtubeId(url) {
@@ -609,7 +620,7 @@ function renderHoje() {
 function videoButton(e) {
   if (e.hasVideo) return `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Meu vídeo</button>`;
   return hasAnyVideo(e)
-    ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ Exemplo</button>`
+    ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ ${exLabel(e)}</button>`
     : `<button class="btn small" data-action="edit-ex" data-id="${e.id}">Gravar</button>`;
 }
 
@@ -771,7 +782,7 @@ function renderDayLists() {
           <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div></div>
         ${e.hasVideo
           ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Meu vídeo</button>`
-          : `${hasAnyVideo(e) ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ Exemplo</button>` : ''}
+          : `${hasAnyVideo(e) ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ ${exLabel(e)}</button>` : ''}
              <button class="btn small" data-action="edit-ex" data-id="${e.id}">Gravar</button>`}
       </div>`).join('')}
     </details>`;
@@ -817,7 +828,7 @@ function searchResults(q) {
       <div class="grow"><div>${esc(e.name)}</div>
         <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div>
         <div class="muted">${esc(where.join(' · '))}</div></div>
-      ${hasAnyVideo(e) ? `<button class="btn small ${e.hasVideo ? 'video-btn' : ''}" data-action="play" data-id="${e.id}">▶ ${e.hasVideo ? 'Meu vídeo' : 'Exemplo'}</button>` : ''}
+      ${hasAnyVideo(e) ? `<button class="btn small ${e.hasVideo ? 'video-btn' : ''}" data-action="play" data-id="${e.id}">▶ ${e.hasVideo ? 'Meu vídeo' : exLabel(e)}</button>` : ''}
       <button class="btn small" data-action="edit-ex" data-id="${e.id}">Editar</button>
     </div>`).join('');
 }
@@ -826,7 +837,7 @@ function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
   const allEx = state.workouts.flatMap(w => w.exercises);
   const withVideo = allEx.filter(hasAnyVideo).length;
-  const own = allEx.filter(e => e.hasVideo).length, pers = allEx.filter(e => e.videoSrc).length, net = allEx.filter(e => e.videoUrl).length;
+  const own = allEx.filter(e => e.hasVideo).length, pers = allEx.filter(e => e.hasPersonal || e.videoSrc).length, net = allEx.filter(e => e.videoUrl).length;
   let html = `<div class="card"><h3>Buscar exercício</h3>
     <input class="field" type="search" placeholder="Digite o nome, ex.: supino, remada, rosca" data-action="search-ex" value="${esc(searchQuery)}" autocomplete="off" enterkeyhint="search">
     <div id="search-results">${searchResults(searchQuery)}</div>
@@ -836,6 +847,9 @@ function renderTreinos() {
     <div class="muted" style="margin-top:6px">Envie seus vídeos de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
     <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar meus vídeos
       <input type="file" accept="video/*" multiple data-action="bulk-videos" hidden></label>
+    <div class="muted" style="margin-top:10px">Vídeos de exemplo do personal: aparecem no lugar do YouTube. Seu vídeo continua em primeiro.</div>
+    <label class="btn block" style="margin-top:6px;text-align:center;color:var(--text);font-size:16px">Enviar vídeos do personal
+      <input type="file" accept="video/*" multiple data-action="bulk-personal" hidden></label>
     ${renderToRecord()}
   </div>
   <div class="card"><h3>Vídeo longo da galeria</h3>
@@ -1151,27 +1165,34 @@ function editMeasure(id) {
 const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .replace(/\.[a-z0-9]+$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
+// Nome igual ao do exercício ganha direto. Senão, vence quem tem mais palavras do arquivo;
+// no empate, o nome mais completo ("Elevação lateral na polia" ganha de "Elevação lateral").
 function bestMatch(fileName, list) {
+  const exact = list.find(e => norm(e.name) === norm(fileName));
+  if (exact) return exact;
   const words = new Set(norm(fileName).split(' ').filter(w => w.length > 2));
   let best = null, bestScore = 0;
   list.forEach(e => {
     const ew = norm(e.name).split(' ').filter(w => w.length > 2);
     if (!ew.length) return;
     const hits = ew.filter(w => words.has(w)).length;
-    const score = hits / ew.length + (e.hasVideo ? 0 : 0.01);
+    const score = hits / ew.length + hits * 0.02 + (e.hasVideo ? 0 : 0.01);
     if (hits && score > bestScore) { best = e; bestScore = score; }
   });
   return best;
 }
 
 let pendingFiles = [];
-function bulkVideos(files) {
+let pendingKind = 'meu'; // 'meu' = seus vídeos; 'personal' = vídeos de exemplo do personal
+function bulkVideos(files, kind = 'meu') {
   pendingFiles = [...files];
+  pendingKind = kind;
+  const has = e => kind === 'personal' ? e.hasPersonal : e.hasVideo;
   const list = state.workouts.flatMap(w => w.exercises.map(e => ({ ...e, wname: w.name })));
   const opts = sel => `<option value="">Não usar</option>` + list.map(e =>
-    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${e.hasVideo ? ' ✓' : ''}</option>`).join('');
-  openModal(`<h3>Ligar vídeos aos exercícios</h3>
-    <div class="muted">Confira cada vídeo. ✓ indica exercício que já tem vídeo (será substituído).</div>
+    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${has(e) ? ' ✓' : ''}</option>`).join('');
+  openModal(`<h3>${kind === 'personal' ? 'Vídeos do personal' : 'Ligar vídeos aos exercícios'}</h3>
+    <div class="muted">Confira cada vídeo. ✓ indica exercício que já tem ${kind === 'personal' ? 'vídeo do personal' : 'vídeo seu'} (será substituído).</div>
     ${pendingFiles.map((f, i) => `<label>${esc(f.name)} <span class="muted">(${Math.round(f.size / 1048576)} MB)</span></label>
       <select class="field" data-bulk="${i}">${opts(bestMatch(f.name, list)?.id)}</select>`).join('')}
     <button class="btn primary block" style="margin-top:14px" data-action="save-bulk">Salvar vídeos</button>`);
@@ -1186,9 +1207,13 @@ async function saveBulk(btn) {
     const e = findExercise(sel.value)?.exercise;
     if (!e) continue;
     // O mesmo exercício em outro dia (mesmo nome) recebe o vídeo também, se ainda não tiver o seu.
-    const twins = state.workouts.flatMap(w => w.exercises).filter(x => x.id !== e.id && norm(x.name) === norm(e.name) && !x.hasVideo);
+    const personal = pendingKind === 'personal';
+    const twins = state.workouts.flatMap(w => w.exercises).filter(x => x.id !== e.id && norm(x.name) === norm(e.name) && !(personal ? x.hasPersonal : x.hasVideo));
     try {
-      for (const x of [e, ...twins]) { await videoDB.put(x.id, pendingFiles[sel.dataset.bulk]); x.hasVideo = true; }
+      for (const x of [e, ...twins]) {
+        await videoDB.put(personal ? pKey(x.id) : x.id, pendingFiles[sel.dataset.bulk]);
+        if (personal) x.hasPersonal = true; else x.hasVideo = true;
+      }
       ok++;
     }
     catch (err) { alert(`Não consegui salvar ${pendingFiles[sel.dataset.bulk].name}. O aparelho pode estar sem espaço.`); break; }
@@ -1317,10 +1342,12 @@ function closeModal() {
   if (wasMarking) render();
 }
 
-// Fontes de vídeo de um exercício, na ordem de prioridade: seu vídeo, trecho do personal, internet.
+// Fontes de vídeo de um exercício, na ordem de prioridade: seu vídeo, vídeo do personal,
+// trecho do vídeo longo, internet. O YouTube só aparece primeiro quando não há nenhum dos outros.
 const videoSources = e => [
   e.hasVideo && { key: 'meu', label: 'Meu vídeo' },
-  e.videoSrc && { key: 'personal', label: 'Personal' },
+  e.hasPersonal && { key: 'pclip', label: 'Personal' },
+  e.videoSrc && { key: 'personal', label: e.hasPersonal ? 'Trecho' : 'Personal' },
   e.videoUrl && { key: 'internet', label: 'Internet' }
 ].filter(Boolean);
 
@@ -1335,6 +1362,10 @@ async function playVideo(exId, which) {
   let clip = false;
   if (cur === 'meu') {
     const blob = await videoDB.get(e.id).catch(() => null);
+    if (blob) { modalUrl = URL.createObjectURL(blob); player = `<video src="${modalUrl}" controls playsinline autoplay muted loop></video>`; }
+  }
+  if (cur === 'pclip') {
+    const blob = await videoDB.get(pKey(e.id)).catch(() => null);
     if (blob) { modalUrl = URL.createObjectURL(blob); player = `<video src="${modalUrl}" controls playsinline autoplay muted loop></video>`; }
   }
   if (cur === 'personal') {
@@ -1366,7 +1397,7 @@ async function playVideo(exId, which) {
     ${tabs}
     ${player}
     ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}
-    ${!e.hasVideo ? `<div class="hint keep" style="margin-top:10px">${cur === 'personal' ? 'Vídeo do personal' : 'Vídeo de exemplo'}. Grave o seu na mesma posição e ele passa a abrir no lugar deste.</div>
+    ${!e.hasVideo ? `<div class="hint keep" style="margin-top:10px">${cur === 'personal' || cur === 'pclip' ? 'Vídeo do personal' : 'Vídeo de exemplo'}. Grave o seu na mesma posição e ele passa a abrir no lugar deste.</div>
       <button class="btn primary block" data-action="edit-ex" data-id="${e.id}">Gravar o meu e substituir</button>` : ''}`);
   if (clip) loopClip(document.getElementById('clip'), e.videoStart, e.videoEnd);
 }
@@ -1505,6 +1536,8 @@ function editExercise(exId, workoutId) {
       <label>Vídeo do aparelho ${e.hasVideo ? '<span class="tag ok">salvo</span>' : ''}</label>
       <input class="field" name="file" type="file" accept="video/*">
       ${e.hasVideo ? `<button type="button" class="btn small danger" style="margin-top:6px" data-action="remove-video" data-id="${e.id}">Remover vídeo salvo</button>` : ''}
+      ${e.hasPersonal ? `<div class="hint up" style="margin-top:8px">Vídeo do personal salvo. Envie novos em Treinos > Enviar vídeos do personal.</div>
+        <button type="button" class="btn small danger" data-action="remove-personal" data-id="${e.id}">Remover vídeo do personal</button>` : ''}
       ${e.videoSrc ? `<div class="hint up">Trecho do vídeo longo: ${fmtTime(Math.round(e.videoStart))} a ${fmtTime(Math.round(e.videoEnd))}. Para mudar, use Treinos > Vídeo longo > Marcar.</div>` : ''}
       <label>Ou link do vídeo (YouTube, Google Drive ou videos/arquivo.mp4 do repositório)</label>
       <input class="field" name="videoUrl" type="text" inputmode="url" placeholder="https://" value="${esc(e.videoUrl)}">
@@ -1639,7 +1672,16 @@ document.addEventListener('click', async ev => {
       const found = findExercise(id);
       found.workout.exercises = found.workout.exercises.filter(x => x.id !== id);
       videoDB.del(id).catch(() => {});
+      videoDB.del(pKey(id)).catch(() => {});
       save(); closeModal(); render();
+      break;
+    }
+    case 'remove-personal': {
+      const e = findExercise(id).exercise;
+      await videoDB.del(pKey(id)).catch(() => {});
+      e.hasPersonal = false; save();
+      t.previousElementSibling?.remove();
+      t.remove();
       break;
     }
     case 'remove-video': {
@@ -1663,7 +1705,7 @@ document.addEventListener('click', async ev => {
     case 'delete-workout': {
       const w = getWorkout(id);
       if (!confirm(`Excluir o treino "${w.name}"?`)) break;
-      w.exercises.forEach(e => videoDB.del(e.id).catch(() => {}));
+      w.exercises.forEach(e => { videoDB.del(e.id).catch(() => {}); videoDB.del(pKey(e.id)).catch(() => {}); });
       state.workouts = state.workouts.filter(x => x.id !== id);
       Object.keys(state.schedule).forEach(d => { if (state.schedule[d] === id) state.schedule[d] = null; });
       if (a && a.workoutId === id) state.active = null;
@@ -1718,6 +1760,10 @@ document.addEventListener('change', ev => {
       break;
     case 'bulk-videos':
       if (t.files.length) bulkVideos(t.files);
+      t.value = '';
+      break;
+    case 'bulk-personal':
+      if (t.files.length) bulkVideos(t.files, 'personal');
       t.value = '';
       break;
     case 'import': {

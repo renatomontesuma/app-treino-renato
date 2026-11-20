@@ -68,7 +68,11 @@ Regra: nunca apagar histórico, vídeos ou links que o usuário colocou. Migraç
 
 ## Vídeos
 
-Prioridade no player: vídeo próprio (Meu vídeo) > trecho do vídeo longo do personal > YouTube (Internet). O player mostra abas para alternar.
+Prioridade no player: vídeo próprio (Meu vídeo) > vídeo do personal (clipe curto) > trecho do vídeo longo do personal > YouTube (Internet). O player mostra abas para alternar. Sem vídeo próprio, o botão diz "Personal" quando há vídeo do personal e "Exemplo" quando só há YouTube.
+
+* Vídeo do personal: IndexedDB chave `pe_<id do exercício>`, flag `hasPersonal`. Enviado em Treinos > Enviar vídeos do personal (mesmo envio em lote, liga pelo nome do arquivo e repassa ao mesmo exercício em outros dias).
+* `VÍDEOS PERSONAL` (fora do Git): clipes originais do personal (Instagram, com música) e `PARA O APP/`, com as versões processadas (960 px de altura, sem áudio) já com o nome do exercício do app. Processados: desenvolvimento-na-maquina, triceps-na-polia, triceps-frances, remada-cavalinho-apoiada (Remada T-bar), crucifixo-inverso, puxada-articulada e barra-fixa-ou-puxada (os dois da Puxada aberta), remada-unilateral (Remada serrote), elevacao-lateral-na-polia, crucifixo-na-polia (Crucifixo inclinado no cabo).
+* Clipes do personal sem exercício igual no plano (não usados): Elevação lateral máquina, Extensão lombar no banco romano, Remada baixa no triângulo, Remada unilateral máquina, Rosca Scott máquina, Rosca bíceps na polia, Rosca no banco inclinado, Supino inclinado máquina, Supino reto articulado, Supino reto máquina, Tríceps corda na polia, Voador peitoral. IMG_6752.MP4 é o vídeo longo (15 min).
 
 * Envio em lote (Treinos > Enviar meus vídeos) liga cada arquivo ao exercício pelo nome do arquivo e repassa o vídeo aos exercícios de mesmo nome em outros dias.
 * Aba Semana > Exercícios de cada dia: lista completa por dia, com "Meu vídeo", "Exemplo" e "Gravar".

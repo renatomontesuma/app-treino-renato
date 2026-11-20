@@ -1,4 +1,4 @@
-const CACHE = 'treino-v24';
+const CACHE = 'treino-v25';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/favicon-32.png'];
 
 // Pede sempre ao servidor se o arquivo mudou. Sem isso, o celular reaproveita a versão
