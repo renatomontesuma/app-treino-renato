@@ -89,6 +89,7 @@ function planoInicial() {
     focus: {},
     measures: [],
     sources: [],
+    profile: {},
     planVersion: PLAN_VERSION
   };
 }
@@ -250,7 +251,7 @@ function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const st = { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
+      const st = { focus: {}, measures: [], sources: [], profile: {}, ...JSON.parse(raw) };
       if ((st.planVersion || 1) < 2 && !st.active) applyPlanV2(st);
       if ((st.planVersion || 1) === 2) applyVideosV3(st);
       if ((st.planVersion || 1) === 3 && !st.active) applySupinoV4(st);
@@ -825,12 +826,85 @@ function delta(m, cur, prev) {
   return `<span style="color:${good ? 'var(--accent)' : 'var(--warn)'}">${d > 0 ? '+' : ''}${String(d).replace('.', ',')} ${m.unit}</span>`;
 }
 
+/* ---------- Meus dados: altura, peso e idade ---------- */
+
+// Idade calculada pela data de nascimento, para atualizar sozinha a cada aniversário.
+function ageFrom(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
+  return age >= 0 && age < 120 ? age : null;
+}
+
+// O peso vem do registro de medidas mais recente que tem peso.
+function lastWeight() {
+  const r = [...state.measures].sort((a, b) => b.date.localeCompare(a.date)).find(m => m.values.peso != null);
+  return r ? { kg: num(r.values.peso), date: r.date } : null;
+}
+
+const fmtNum = v => String(v).replace('.', ',');
+
+function profileCard() {
+  const p = state.profile || {};
+  const w = lastWeight();
+  const age = ageFrom(p.nascimento);
+  if (!p.altura && !w && age == null) {
+    return `<div class="card"><h3>Meus dados</h3>
+      <div class="muted">Informe altura, peso e data de nascimento. Os dados ficam só neste aparelho.</div>
+      <button class="btn primary block" style="margin-top:8px" data-action="edit-profile">Preencher meus dados</button></div>`;
+  }
+  const item = (label, val, sub) => `<div><div class="muted">${label}</div><div style="font-size:20px;font-weight:600">${val}</div>${sub ? `<div class="muted" style="font-size:12px">${sub}</div>` : ''}</div>`;
+  return `<div class="card"><div class="row between"><h3>Meus dados</h3>
+      <button class="btn small" data-action="edit-profile">Editar</button></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px">
+      ${item('Altura', p.altura ? `${fmtNum(p.altura)} cm` : '—')}
+      ${item('Peso', w ? `${fmtNum(w.kg)} kg` : '—', w ? `em ${w.date.slice(8)}/${w.date.slice(5, 7)}` : '')}
+      ${item('Idade', age != null ? `${age} anos` : '—')}
+    </div></div>`;
+}
+
+function editProfile() {
+  const p = state.profile || {};
+  const w = lastWeight();
+  openModal(`<h3>Meus dados</h3>
+    <form id="p-form">
+      <label>Altura (cm)</label>
+      <input class="field" name="altura" inputmode="decimal" placeholder="ex.: 178" value="${esc(p.altura ? fmtNum(p.altura) : '')}">
+      <label>Peso atual (kg)</label>
+      <input class="field" name="peso" inputmode="decimal" placeholder="ex.: 80,5" value="${esc(w ? fmtNum(w.kg) : '')}">
+      <div class="muted">Um peso novo entra nas medidas de hoje e aparece na evolução.</div>
+      <label>Data de nascimento</label>
+      <input class="field" type="date" name="nascimento" max="${todayISO()}" value="${esc(p.nascimento || '')}">
+      <button class="btn primary block" style="margin-top:14px" type="submit">Salvar</button>
+    </form>`);
+  document.getElementById('p-form').onsubmit = ev => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const altura = String(f.get('altura')).trim();
+    const peso = String(f.get('peso')).trim();
+    const nascimento = String(f.get('nascimento')).trim();
+    if (altura && !(num(altura) >= 100 && num(altura) <= 250)) { alert('Informe a altura em centímetros, por exemplo 178.'); return; }
+    if (peso && !(num(peso) >= 30 && num(peso) <= 300)) { alert('Informe o peso em quilos, por exemplo 80,5.'); return; }
+    if (nascimento && ageFrom(nascimento) == null) { alert('Confira a data de nascimento.'); return; }
+    state.profile = { ...p, altura: altura ? num(altura) : null, nascimento: nascimento || null };
+    if (peso && (!w || num(peso) !== w.kg)) {
+      const today = todayISO();
+      const rec = state.measures.find(m => m.date === today);
+      if (rec) rec.values.peso = num(peso);
+      else state.measures.push({ id: uid(), date: today, values: { peso: num(peso) } });
+    }
+    save(); closeModal(); render();
+  };
+}
+
 function renderMedidas() {
   setHeader('Medidas', 'Evolução mês a mês');
   const months = monthlyMeasures();
   const mk = monthKey();
   const hasThisMonth = months.some(m => m.month === mk);
-  let html = `<div class="card">
+  let html = profileCard() + `<div class="card">
     ${hasThisMonth
       ? `<div class="muted">Medidas de ${monthLabel(mk)} registradas.</div>`
       : `<div class="hint keep">Você ainda não registrou as medidas de ${monthLabel(mk)}.</div>`}
@@ -1346,6 +1420,7 @@ document.addEventListener('click', async ev => {
       save(); { const y = window.scrollY; render(); window.scrollTo(0, y); }
       break;
     }
+    case 'edit-profile': editProfile(); break;
     case 'new-measure': editMeasure(null); break;
     case 'edit-measure': editMeasure(id); break;
     case 'delete-measure':
@@ -1460,7 +1535,7 @@ document.addEventListener('change', ev => {
       file.text().then(txt => {
         const data = JSON.parse(txt);
         if (!Array.isArray(data.workouts) || !data.schedule) throw new Error();
-        state = { logs: [], active: null, focus: {}, measures: [], sources: [], ...data };
+        state = { logs: [], active: null, focus: {}, measures: [], sources: [], profile: {}, ...data };
         save(); render();
         alert('Backup importado.');
       }).catch(() => alert('Arquivo de backup inválido.'));

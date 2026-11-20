@@ -13,7 +13,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 
 ## Onde ficam os dados
 
-* `localStorage`, chave `treino-hipertrofia-v1`: plano, semana, histórico de cargas, medidas, foco do mês.
+* `localStorage`, chave `treino-hipertrofia-v1`: plano, semana, histórico de cargas, medidas, foco do mês e perfil (`profile`: altura em cm e data de nascimento; o peso vem de `measures`).
 * IndexedDB `treino-videos`: vídeos enviados pelo celular (chave = id do exercício) e vídeos longos (chave `src_...`).
 * Os dados ficam só no aparelho. Backup em JSON na aba Histórico.
 

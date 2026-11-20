@@ -10,6 +10,7 @@ App pessoal de treino para ganho de massa muscular. Funciona no navegador do cel
 * Treinos: edita exercícios, séries, faixa de reps, descanso, observações e vídeos.
 * Vídeos: envie vários arquivos do celular de uma vez em Treinos. O app liga cada vídeo ao exercício pelo nome do arquivo. Também aceita link do YouTube, Google Drive ou da pasta videos/ deste repositório.
 * Foco do mês (aba Semana): escolha os grupos a priorizar. Eles ganham 1 série por exercício e abrem o treino. Os demais mantêm as séries e a carga.
+* Meus dados (aba Medidas): altura, peso e data de nascimento. A idade é calculada sozinha e o peso vem das medidas mais recentes.
 * Medidas: registre peso, gordura e circunferências todo mês e veja a variação contra o mês anterior e contra o início.
 * Evolução das cargas (aba Histórico): gráfico da maior carga por exercício, variação desde o início, 1RM estimado e registro manual de cargas.
 * Recorde: o treino avisa quando você supera sua maior carga no exercício.
