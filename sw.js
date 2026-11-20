@@ -1,4 +1,4 @@
-const CACHE = 'treino-v22';
+const CACHE = 'treino-v23';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg'];
 
 // Pede sempre ao servidor se o arquivo mudou. Sem isso, o celular reaproveita a versão

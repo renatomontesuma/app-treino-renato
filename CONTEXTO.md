@@ -7,7 +7,7 @@ Este arquivo resume tudo o que foi decidido na primeira sessão de desenvolvimen
 App pessoal de treino para hipertrofia (ganho de massa muscular). Página web instalável no celular (PWA), sem servidor e sem login. Tudo em HTML, CSS e JavaScript puro, sem build.
 
 * `index.html`, `style.css`, `app.js`: o app.
-* `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) a cada mudança de arquivo do app. O app procura versão nova sempre que volta à tela e recarrega sozinho (durante um treino só mostra um aviso). Isso existe porque o iPhone retoma o app do segundo plano sem recarregar.
+* `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) e `APP_BUILD` em `app.js` (mesmo número) a cada mudança de arquivo do app. A versão aparece no fim da aba Histórico. O app procura versão nova sempre que volta à tela e recarrega sozinho (durante um treino só mostra um aviso). Isso existe porque o iPhone retoma o app do segundo plano sem recarregar.
 * `manifest.json`, `icon.svg`: instalação na tela inicial.
 * Publicação: GitHub Pages ativo (repositório público) a partir do branch `claude/eager-thompson-l53kq5`, pasta raiz. Endereço: https://renatomontesuma.github.io/app-treino-renato/
 
@@ -20,7 +20,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 ## Preferências do usuário (respeitar sempre)
 
 * Padrão de séries: 3 séries de 6 a 10 repetições em todos os exercícios.
-* Exceção: Abdominal na máquina, 5 séries de 60 repetições, sem carga. Faz todos os dias: está no fim de todos os treinos.
+* Exceção: Abdominal na máquina, 5 séries de 60 repetições, sem carga. Faz todos os dias: está no fim de todos os treinos. `ensureDailyAbs()` roda a cada abertura do app e coloca o abdominal em qualquer treino que não tenha.
 * Supinos e roscas com halteres: registrar o peso de cada halter.
 * Treina de segunda a sábado. Domingo às vezes (treino opcional).
 * Quer usar vídeos próprios gravados na academia. Enquanto não grava, usa vídeo de exemplo do YouTube.

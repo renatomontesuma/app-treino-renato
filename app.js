@@ -98,6 +98,8 @@ function planoInicial() {
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
 const PLAN_VERSION = 11;
+// Mesmo número do cache em sw.js (treino-vN). Aparece no fim da aba Histórico para conferir se o celular atualizou.
+const APP_BUILD = 23;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -231,14 +233,21 @@ function applyPuxadaV8(st) {
 // Renato faz abdominal na máquina todos os dias: entra no fim de todos os treinos que ainda não têm.
 // Copia séries, link, trecho do personal e observação do abdominal que já existe. O vídeo próprio
 // é repassado por shareOwnVideos(), que liga exercícios de mesmo nome.
-function applyAbdominalV9(st) {
+// Roda a cada abertura do app (não só na migração): qualquer treino sem abdominal na máquina ganha um.
+function ensureDailyAbs(st) {
   const base = st.workouts.flatMap(w => w.exercises).find(isAbMachine)
     || { ...ex('Abdominal na máquina', 'Abdômen', 5, 60, 60, 60), bodyweight: true, videoUrl: `https://www.youtube.com/watch?v=${VIDEOS_INTERNET['Abdominal na máquina']}` };
+  let added = 0;
   st.workouts.forEach(w => {
     if (w.exercises.some(isAbMachine)) return;
     const { id, hasVideo, ...copy } = base;
     w.exercises.push({ ...copy, id: uid(), hasVideo: false });
+    added++;
   });
+  return added;
+}
+function applyAbdominalV9(st) {
+  ensureDailyAbs(st);
   st.planVersion = 9;
   return st;
 }
@@ -316,6 +325,7 @@ function load() {
       if ((st.planVersion || 1) === 8 && !st.active) applyAbdominalV9(st);
       if ((st.planVersion || 1) === 9 && !st.active) applyDesenvolvimentoV10(st);
       if ((st.planVersion || 1) === 10 && !st.active) applyDesenvolvimentoV11(st);
+      if (ensureDailyAbs(st)) localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
@@ -898,7 +908,8 @@ function renderHistorico() {
       <label class="btn small" style="margin:0;color:var(--text);font-size:14px">Importar backup
         <input type="file" accept="application/json" data-action="import" hidden></label>
       <button class="btn small danger" data-action="reset">Restaurar plano inicial</button>
-    </div></div>`;
+    </div></div>
+    <div class="muted" style="text-align:center;font-size:12px;margin:4px 0 12px">Versão do app: ${APP_BUILD} · plano ${state.planVersion}</div>`;
   view.innerHTML = html;
 }
 
