@@ -99,7 +99,7 @@ function planoInicial() {
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
 const PLAN_VERSION = 11;
 // Mesmo número do cache em sw.js (treino-vN). Aparece no fim da aba Histórico para conferir se o celular atualizou.
-const APP_BUILD = 23;
+const APP_BUILD = 24;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {

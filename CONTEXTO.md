@@ -8,7 +8,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 
 * `index.html`, `style.css`, `app.js`: o app.
 * `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) e `APP_BUILD` em `app.js` (mesmo número) a cada mudança de arquivo do app. A versão aparece no fim da aba Histórico. O app procura versão nova sempre que volta à tela e recarrega sozinho (durante um treino só mostra um aviso). Isso existe porque o iPhone retoma o app do segundo plano sem recarregar.
-* `manifest.json`, `icon.svg`: instalação na tela inicial.
+* `manifest.json`, `icons/`: instalação na tela inicial. Ícone do usuário (WENUTRI fitness), gerado de `icone.png` (1080 px, fora do Git) com ffmpeg: `apple-touch-icon.png` 180 px para o iPhone, 192 e 512 px e uma versão `maskable` com margem para o Android. `icon.svg` é o ícone antigo, sem uso.
 * Publicação: GitHub Pages ativo (repositório público) a partir do branch `claude/eager-thompson-l53kq5`, pasta raiz. Endereço: https://renatomontesuma.github.io/app-treino-renato/
 
 ## Onde ficam os dados
