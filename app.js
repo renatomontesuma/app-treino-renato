@@ -187,6 +187,28 @@ function lastPerformance(exId) {
   return null;
 }
 
+// Fórmula de Epley: estimativa de 1 repetição máxima a partir de carga e reps.
+const e1rm = (kg, reps) => reps > 0 ? kg * (1 + reps / 30) : 0;
+const fmtKg = v => (Math.round(v * 10) / 10).toLocaleString('pt-BR');
+
+function exerciseHistory(exId) {
+  const out = [];
+  state.logs.forEach(l => l.entries.forEach(en => {
+    if (en.exId !== exId) return;
+    const sets = en.sets.filter(s => s.done && num(s.kg) > 0);
+    if (!sets.length) return;
+    out.push({
+      date: l.date, logId: l.id, manual: !!l.manual, sets,
+      top: Math.max(...sets.map(s => num(s.kg))),
+      e1rm: Math.max(...sets.map(s => e1rm(num(s.kg), num(s.reps)))),
+      volume: sets.reduce((a, s) => a + num(s.kg) * num(s.reps), 0)
+    });
+  }));
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const bestTop = exId => Math.max(0, ...exerciseHistory(exId).map(h => h.top));
+
 // Dupla progressão: bateu o topo da faixa em todas as séries, sobe a carga.
 function suggestion(exercise, last) {
   if (!last) return { type: 'keep', text: 'Primeira vez: escolha uma carga que deixe 1 a 2 repetições na reserva.' };
@@ -372,6 +394,7 @@ function renderSessao() {
     const last = lastPerformance(e.id);
     const sug = suggestion(e, last);
     const complete = en.sets.every(s => s.done);
+    const prev = bestTop(e.id);
     return `<div class="card">
       <div class="row between">
         <div class="grow"><h3>${esc(e.name)} ${isFocus(e) ? '<span class="tag ok">foco</span>' : ''} ${complete ? '<span class="tag ok">feito</span>' : ''}</h3>
@@ -381,10 +404,11 @@ function renderSessao() {
       ${e.notes ? `<div class="muted" style="margin-top:6px">${esc(e.notes)}</div>` : ''}
       ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => `${s.kg || 0}kg×${s.reps || 0}`).join(', ')}</div>` : ''}
       <div class="hint ${sug.type}">${esc(sug.text)}</div>
+      ${en.sets.some(s => s.done && prev > 0 && num(s.kg) > prev) ? `<div class="hint up">🏆 Recorde de carga: acima dos ${fmtKg(prev)} kg anteriores.</div>` : ''}
       <div class="sets">
         <div class="set head"><span class="num">#</span><span>Carga (kg)</span><span>Reps</span><span></span></div>
         ${en.sets.map((s, si) => `<div class="set ${s.done ? 'done' : ''}">
-          <span class="num">${si + 1}</span>
+          <span class="num">${s.done && prev > 0 && num(s.kg) > prev ? '🏆' : si + 1}</span>
           <input inputmode="decimal" value="${esc(s.kg)}" placeholder="kg" data-action="set-input" data-field="kg" data-e="${ei}" data-s="${si}">
           <input inputmode="numeric" value="${esc(s.reps)}" placeholder="${e.repMin}–${e.repMax}" data-action="set-input" data-field="reps" data-e="${ei}" data-s="${si}">
           <button class="check" data-action="toggle-set" data-e="${ei}" data-s="${si}">✓</button>
@@ -496,16 +520,19 @@ function renderTreinos() {
 }
 
 function renderHistorico() {
-  setHeader('Histórico', `${state.logs.length} treinos registrados`);
+  const sessions = state.logs.filter(l => !l.manual);
+  setHeader('Histórico', `${sessions.length} treinos registrados`);
   const logs = [...state.logs].reverse();
   let html = '';
 
   if (logs.length) {
     const since = Date.now() - 7 * 864e5;
-    const week = state.logs.filter(l => new Date(l.date + 'T12:00').getTime() >= since).length;
+    const week = sessions.filter(l => new Date(l.date + 'T12:00').getTime() >= since).length;
     html += `<div class="card row between"><div><div class="muted">Últimos 7 dias</div><h2>${week} treinos</h2></div>
-      <div style="text-align:right"><div class="muted">Total</div><h2>${state.logs.length}</h2></div></div>`;
-  } else {
+      <div style="text-align:right"><div class="muted">Total</div><h2>${sessions.length}</h2></div></div>`;
+  }
+  html += renderLoadEvolution();
+  if (!logs.length) {
     html += `<div class="card empty">Nenhum treino salvo ainda. Finalize um treino na aba Hoje para ver seu progresso aqui.</div>`;
   }
 
@@ -514,7 +541,7 @@ function renderHistorico() {
     const volume = sets.reduce((a, s) => a + num(s.kg) * num(s.reps), 0);
     return `<details class="card">
       <summary class="row between" style="list-style:none;cursor:pointer">
-        <div class="grow"><strong>${esc(l.workoutName)}</strong><div class="muted">${fmtDate(l.date)} · ${l.minutes} min</div></div>
+        <div class="grow"><strong>${esc(l.workoutName)}</strong><div class="muted">${fmtDate(l.date)}${l.manual ? '' : ` · ${l.minutes} min`}</div></div>
         <div style="text-align:right"><div>${sets.length} séries</div><div class="muted">${Math.round(volume).toLocaleString('pt-BR')} kg</div></div>
       </summary>
       ${l.entries.map(e => `<div class="list-item"><div class="grow">${esc(e.name)}</div>
@@ -673,6 +700,109 @@ async function saveBulk(btn) {
   pendingFiles = [];
   save(); closeModal(); render();
   if (ok) alert(`${ok} vídeo(s) salvo(s).`);
+}
+
+/* ================= Evolução das cargas ================= */
+
+function renderLoadEvolution() {
+  const rows = state.workouts.map(w => {
+    const items = w.exercises.map(e => ({ e, h: exerciseHistory(e.id) })).filter(x => x.h.length);
+    if (!items.length) return '';
+    return `<div class="muted" style="margin-top:12px;font-weight:600">${esc(w.name)}</div>` + items.map(({ e, h }) => {
+      const first = h[0].top, cur = h.at(-1).top, best = Math.max(...h.map(x => x.top));
+      const pct = first > 0 ? Math.round((cur - first) / first * 100) : 0;
+      return `<div class="list-item" data-action="load-detail" data-id="${e.id}" style="cursor:pointer">
+        <div class="grow"><div>${esc(e.name)} ${cur === best && h.length > 1 && cur > first ? '<span class="tag ok">recorde</span>' : ''}</div>
+          <div class="muted">${fmtKg(cur)} kg · início ${fmtKg(first)} kg · <span style="color:${pct > 0 ? 'var(--accent)' : pct < 0 ? 'var(--warn)' : 'var(--muted)'}">${pct > 0 ? '+' : ''}${pct}%</span></div></div>
+        <div style="width:80px">${sparkline(h.map(x => x.top))}</div>
+      </div>`;
+    }).join('');
+  }).join('');
+  return `<div class="card"><h3>Evolução das cargas</h3>
+    <div class="muted">Maior carga por treino em cada exercício. Toque para ver o detalhe.</div>
+    ${rows || '<div class="muted" style="margin-top:8px">Ainda sem cargas registradas.</div>'}
+    <button class="btn small block" style="margin-top:10px" data-action="manual-load">+ Registrar carga manualmente</button>
+  </div>`;
+}
+
+function bigChart(h) {
+  if (h.length < 2) return '';
+  const vals = h.map(x => x.top);
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const X = i => 30 + (i / (h.length - 1)) * 260, Y = v => 110 - ((v - min) / span) * 90;
+  return `<svg viewBox="0 0 300 130" class="chart">
+    <text x="0" y="${Y(max) + 4}" class="axis">${fmtKg(max)}</text>
+    <text x="0" y="${Y(min) + 4}" class="axis">${fmtKg(min)}</text>
+    <polyline points="${vals.map((v, i) => `${X(i)},${Y(v)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+    ${vals.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="var(--accent)"/>`).join('')}
+    <text x="30" y="126" class="axis">${h[0].date.slice(8, 10)}/${h[0].date.slice(5, 7)}</text>
+    <text x="290" y="126" class="axis" text-anchor="end">${h.at(-1).date.slice(8, 10)}/${h.at(-1).date.slice(5, 7)}</text>
+  </svg>`;
+}
+
+function loadDetail(exId) {
+  const e = findExercise(exId)?.exercise;
+  if (!e) return;
+  const h = exerciseHistory(exId);
+  const best = h.reduce((a, x) => x.top > a.top ? x : a, h[0]);
+  const bestE = Math.max(...h.map(x => x.e1rm));
+  openModal(`<h3 style="margin-right:30px">${esc(e.name)}</h3>
+    <div class="muted">${esc(e.muscle)} · ${h.length} registro(s)</div>
+    <div class="grid-2" style="gap:8px;margin:10px 0">
+      <div class="card" style="margin:0"><div class="muted">Maior carga</div><h2>${fmtKg(best.top)} kg</h2><div class="muted">${fmtDate(best.date)}</div></div>
+      <div class="card" style="margin:0"><div class="muted">1RM estimado</div><h2>${fmtKg(bestE)} kg</h2><div class="muted">fórmula de Epley</div></div>
+    </div>
+    ${bigChart(h)}
+    ${[...h].reverse().map(x => `<div class="list-item"><div class="grow"><div>${fmtDate(x.date)} ${x.manual ? '<span class="tag">manual</span>' : ''}</div>
+      <div class="muted">${x.sets.map(s => `${fmtKg(num(s.kg))}×${s.reps || 0}`).join(' · ')}</div></div>
+      <div class="muted" style="text-align:right">${fmtKg(x.top)} kg</div></div>`).join('')}
+    <button class="btn block" style="margin-top:12px" data-action="manual-load" data-id="${e.id}">+ Registrar carga deste exercício</button>`);
+}
+
+function manualLoad(exId) {
+  const list = state.workouts.flatMap(w => w.exercises.map(e => ({ e, w })));
+  const sel = exId || list[0]?.e.id;
+  const e0 = findExercise(sel)?.exercise;
+  const last = e0 ? lastPerformance(e0.id) : null;
+  const n = Math.max(e0?.sets || 3, last?.sets.length || 0);
+  openModal(`<h3>Registrar carga</h3>
+    <div class="muted">Use para lançar cargas de treinos feitos sem o app ou para registrar sua carga atual.</div>
+    <form id="load-form">
+      <label>Exercício</label>
+      <select class="field" name="ex">${state.workouts.map(w => `<optgroup label="${esc(w.name)}">${w.exercises.map(e =>
+        `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</optgroup>`).join('')}</select>
+      <label>Data</label>
+      <input class="field" type="date" name="date" value="${todayISO()}" max="${todayISO()}" required>
+      <div class="sets">
+        <div class="set head" style="grid-template-columns:28px 1fr 1fr"><span class="num">#</span><span>Carga (kg)</span><span>Reps</span></div>
+        ${Array.from({ length: n }, (_, i) => `<div class="set" style="grid-template-columns:28px 1fr 1fr"><span class="num">${i + 1}</span>
+          <input name="kg${i}" inputmode="decimal" placeholder="kg" value="${esc(last?.sets[i]?.kg ?? '')}">
+          <input name="reps${i}" inputmode="numeric" placeholder="reps"></div>`).join('')}
+      </div>
+      <div class="muted" style="margin-top:6px">Séries sem carga ou sem reps ficam de fora.</div>
+      <button class="btn primary block" style="margin-top:12px" type="submit">Salvar</button>
+    </form>`);
+  const form = document.getElementById('load-form');
+  form.ex.onchange = () => manualLoad(form.ex.value);
+  form.onsubmit = ev => {
+    ev.preventDefault();
+    const f = new FormData(form);
+    const found = findExercise(f.get('ex'));
+    const sets = [];
+    for (let i = 0; i < n; i++) {
+      const kg = String(f.get('kg' + i)).trim(), reps = String(f.get('reps' + i)).trim();
+      if (num(kg) > 0 && num(reps) > 0) sets.push({ kg, reps, done: true });
+    }
+    if (!sets.length) { alert('Preencha carga e reps de ao menos uma série.'); return; }
+    state.logs.push({
+      id: uid(), date: f.get('date'), workoutId: found.workout.id, workoutName: `Registro manual: ${found.exercise.name}`,
+      minutes: 0, manual: true,
+      entries: [{ exId: found.exercise.id, name: found.exercise.name, muscle: found.exercise.muscle, sets }]
+    });
+    // Mantém a ordem cronológica: a sugestão de carga usa o registro mais recente.
+    state.logs.sort((a, b) => a.date.localeCompare(b.date));
+    save(); closeModal(); render();
+  };
 }
 
 /* ================= Modais ================= */
@@ -959,6 +1089,8 @@ document.addEventListener('click', async ev => {
       if (confirm('Apagar este registro de medidas?')) { state.measures = state.measures.filter(m => m.id !== id); save(); render(); }
       break;
     case 'save-bulk': saveBulk(t); break;
+    case 'load-detail': loadDetail(id); break;
+    case 'manual-load': manualLoad(id); break;
     case 'open-marker': openMarker(id); break;
     case 'delete-source': {
       if (!confirm('Apagar este vídeo longo? Os trechos marcados nele deixam de funcionar.')) break;
