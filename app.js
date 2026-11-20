@@ -97,7 +97,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 10;
+const PLAN_VERSION = 11;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -259,6 +259,16 @@ function applyDesenvolvimentoV10(st) {
   return st;
 }
 
+// Renato passou a fazer o desenvolvimento na máquina também na segunda (Empurrar): troca em todos os treinos.
+function applyDesenvolvimentoV11(st) {
+  swapExercises(st, { 'Desenvolvimento com halteres': 'Desenvolvimento na máquina' }, 'halteres');
+  st.workouts.forEach(w => w.exercises.forEach(e => {
+    if (e.name === 'Desenvolvimento na máquina' && e.notes === 'Registre o peso de cada halter.') e.notes = '';
+  }));
+  st.planVersion = 11;
+  return st;
+}
+
 // Exercício repetido em outro dia (mesmo nome) usa o seu vídeo, se ele ainda não tiver um.
 async function shareOwnVideos() {
   const all = state.workouts.flatMap(w => w.exercises);
@@ -305,10 +315,11 @@ function load() {
       if ((st.planVersion || 1) === 7 && !st.active) applyPuxadaV8(st);
       if ((st.planVersion || 1) === 8 && !st.active) applyAbdominalV9(st);
       if ((st.planVersion || 1) === 9 && !st.active) applyDesenvolvimentoV10(st);
+      if ((st.planVersion || 1) === 10 && !st.active) applyDesenvolvimentoV11(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyDesenvolvimentoV10(applyAbdominalV9(applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))))))));
+  return applyDesenvolvimentoV11(applyDesenvolvimentoV10(applyAbdominalV9(applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))))))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
