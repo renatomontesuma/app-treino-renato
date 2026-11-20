@@ -95,7 +95,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 7;
+const PLAN_VERSION = 8;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -107,6 +107,8 @@ const VIDEOS_INTERNET = {
   'Tríceps na polia': 'Npv_xl76XWM',
   'Tríceps francês': 'o_mAVpMIBJs',
   'Puxada frontal': 'BOW9my4J_ek',
+  // Sem vídeo próprio de exemplo para a articulada: usa o da puxada frontal, mesmo movimento.
+  'Puxada articulada': 'BOW9my4J_ek',
   'Remada curvada': 's4jeKLRghTM',
   'Remada baixa': '2YebbYuuBJQ',
   'Remada cavalinho apoiada': '1irSxCGkkpY',
@@ -215,6 +217,13 @@ function applySemanaV7(st) {
   return st;
 }
 
+// Renato faz a puxada na máquina articulada de anilhas, não na polia. Carga não se compara: histórico separado.
+function applyPuxadaV8(st) {
+  swapExercises(st, { 'Puxada frontal': 'Puxada articulada' }, 'puxada');
+  st.planVersion = 8;
+  return st;
+}
+
 // Exercício repetido em outro dia (mesmo nome) usa o seu vídeo, se ele ainda não tiver um.
 async function shareOwnVideos() {
   const all = state.workouts.flatMap(w => w.exercises);
@@ -258,10 +267,11 @@ function load() {
       if ((st.planVersion || 1) === 4 && !st.active) applyRemadasV5(st);
       if ((st.planVersion || 1) === 5 && !st.active) applyRoscaV6(st);
       if ((st.planVersion || 1) === 6) applySemanaV7(st);
+      if ((st.planVersion || 1) === 7 && !st.active) applyPuxadaV8(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))));
+  return applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -713,12 +723,57 @@ function renderDayLists() {
     ${rows}</div>`;
 }
 
+/* ---------- Busca de exercícios pelo nome ---------- */
+
+let searchQuery = '';
+
+// Dias da semana em que cada treino aparece (fixo ou opcional).
+function workoutDays(wid) {
+  const days = [];
+  for (let d = 0; d < 7; d++) {
+    if (state.schedule[d] === wid) days.push(DIAS[d]);
+    else if (!state.schedule[d] && state.optional?.[d] === wid) days.push(`${DIAS[d]} (opcional)`);
+  }
+  return days;
+}
+
+// Busca sem acento e sem diferenciar maiúsculas. Todas as palavras digitadas precisam aparecer
+// no nome ou no grupo muscular. Exercícios com o mesmo nome em dias diferentes viram um resultado só.
+function searchResults(q) {
+  const words = norm(q).split(' ').filter(Boolean);
+  if (!words.length) return '';
+  const groups = new Map();
+  state.workouts.forEach(w => w.exercises.forEach(e => {
+    const hay = norm(`${e.name} ${e.muscle}`);
+    if (!words.every(x => hay.includes(x))) return;
+    const k = norm(e.name);
+    if (!groups.has(k)) groups.set(k, { e, where: [] });
+    const g = groups.get(k);
+    if (!g.e.hasVideo && e.hasVideo) g.e = e;
+    const days = workoutDays(w.id);
+    g.where.push(`${w.name.split(':')[0]}${days.length ? ` (${days.join(', ')})` : ''}`);
+  }));
+  if (!groups.size) return `<div class="muted" style="margin-top:8px">Nenhum exercício com “${esc(q)}”.</div>`;
+  return `<div class="muted" style="margin-top:8px">${groups.size} exercício(s)</div>` +
+    [...groups.values()].sort((a, b) => a.e.name.localeCompare(b.e.name, 'pt-BR')).map(({ e, where }) => `<div class="list-item">
+      <div class="grow"><div>${esc(e.name)}</div>
+        <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div>
+        <div class="muted">${esc(where.join(' · '))}</div></div>
+      ${hasAnyVideo(e) ? `<button class="btn small ${e.hasVideo ? 'video-btn' : ''}" data-action="play" data-id="${e.id}">▶ ${e.hasVideo ? 'Meu vídeo' : 'Exemplo'}</button>` : ''}
+      <button class="btn small" data-action="edit-ex" data-id="${e.id}">Editar</button>
+    </div>`).join('');
+}
+
 function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
   const allEx = state.workouts.flatMap(w => w.exercises);
   const withVideo = allEx.filter(hasAnyVideo).length;
   const own = allEx.filter(e => e.hasVideo).length, pers = allEx.filter(e => e.videoSrc).length, net = allEx.filter(e => e.videoUrl).length;
-  let html = `<div class="card"><h3>Vídeos dos exercícios</h3>
+  let html = `<div class="card"><h3>Buscar exercício</h3>
+    <input class="field" type="search" placeholder="Digite o nome, ex.: supino, remada, rosca" data-action="search-ex" value="${esc(searchQuery)}" autocomplete="off" enterkeyhint="search">
+    <div id="search-results">${searchResults(searchQuery)}</div>
+  </div>
+  <div class="card"><h3>Vídeos dos exercícios</h3>
     <div class="muted">${withVideo} de ${allEx.length} exercícios com vídeo. Seus: ${own} · personal: ${pers} · internet: ${net}.</div>
     <div class="muted" style="margin-top:6px">Envie seus vídeos de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
     <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar meus vídeos
@@ -1509,6 +1564,11 @@ document.addEventListener('click', async ev => {
 
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.dataset.action === 'search-ex') {
+    searchQuery = t.value;
+    document.getElementById('search-results').innerHTML = searchResults(searchQuery);
+    return;
+  }
   if (t.dataset.action === 'set-input') {
     state.active.entries[t.dataset.e].sets[t.dataset.s][t.dataset.field] = t.value;
     save();

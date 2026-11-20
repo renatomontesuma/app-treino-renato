@@ -45,17 +45,19 @@ Cada grupo treina 2 vezes por semana, com pelo menos 48 h entre os estímulos.
 * Supino reto com barra e supino inclinado com barra → Supino reto com halteres.
 * Remada curvada → Remada cavalinho apoiada.
 * Remada baixa → Remada sentada articulada.
+* Puxada frontal (polia) → Puxada articulada (máquina de anilhas).
 * Rosca alternada → Rosca simultânea sentado.
 * Prancha removida.
 
 ## Migrações do plano salvo no celular
 
-O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 7):
+O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 8):
 
 * v2: séries 3 × 6–10 e abdominal 5 × 60.
 * v3: links do YouTube (`VIDEOS_INTERNET`) só onde não há link.
 * v4, v5, v6: trocas de exercício via `swapExercises()`. O histórico antigo fica separado (exId com prefixo) porque cargas de aparelhos diferentes não se comparam. Vídeo próprio, trecho do personal e link manual são mantidos.
 * v7: semana de 6 dias, treino "Ombros e braços" e domingo opcional (`state.optional`).
+* v8: Puxada frontal → Puxada articulada, para bater com o vídeo próprio `puxada-articulada`.
 
 Regra: nunca apagar histórico, vídeos ou links que o usuário colocou. Migrações só rodam sem treino em andamento.
 
@@ -67,7 +69,7 @@ Prioridade no player: vídeo próprio (Meu vídeo) > trecho do vídeo longo do p
 * Aba Semana > Exercícios de cada dia: lista completa por dia, com "Meu vídeo", "Exemplo" e "Gravar".
 * Os vídeos do usuário NÃO vão para o Git. O repositório é público e os vídeos mostram o rosto dele e outros alunos. Pasta local: `VÍDEOS RENATO` (fora do Git).
 
-Vídeos próprios já processados (6): supino-reto-com-halteres, puxada-articulada, remada-cavalinho-apoiada, remada-sentada-articulada, rosca-martelo, rosca-simultanea-sentado.
+Vídeos próprios já processados (6): supino-reto-com-halteres, puxada-articulada, remada-cavalinho-apoiada, remada-sentada-articulada, rosca-martelo, rosca-simultanea-sentado. Todos têm exercício com o mesmo nome no app (conferido no plano v8). Regra: o nome do arquivo é o nome do exercício no app, sem acento, em minúsculas e com hífens.
 
 ### Como processar um vídeo do iPhone
 
