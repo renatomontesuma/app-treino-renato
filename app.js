@@ -79,8 +79,7 @@ function planoInicial() {
     ex('Cadeira flexora', 'Posteriores', 3, 10, 12, 60),
     ex('Abdução de quadril', 'Glúteos', 3, 12, 15, 60),
     ex('Panturrilha sentado', 'Panturrilhas', 4, 12, 15, 60),
-    ex('Abdominal na polia', 'Abdômen', 3, 10, 15, 60),
-    ex('Prancha (reps = segundos)', 'Abdômen', 3, 30, 60, 60)
+    { ...ex('Abdominal na máquina', 'Abdômen', 5, 60, 60, 60), bodyweight: true }
   ]};
   return {
     workouts: [empurrar, puxar, pernas, superiores, inferiores],
@@ -89,8 +88,24 @@ function planoInicial() {
     active: null,
     focus: {},
     measures: [],
-    sources: []
+    sources: [],
+    planVersion: PLAN_VERSION
   };
+}
+
+// Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
+const PLAN_VERSION = 2;
+const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
+function applyPlanV2(st) {
+  st.workouts.forEach(w => {
+    w.exercises = w.exercises.filter(e => !/^prancha/i.test(e.name));
+    w.exercises.forEach(e => {
+      if (isAbMachine(e)) Object.assign(e, { name: 'Abdominal na máquina', sets: 5, repMin: 60, repMax: 60, bodyweight: true });
+      else if (!e.bodyweight) Object.assign(e, { sets: 3, repMin: 6, repMax: 10 });
+    });
+  });
+  st.planVersion = 2;
+  return st;
 }
 
 /* ================= Estado ================= */
@@ -102,9 +117,13 @@ let viewWorkoutId = null; // treino escolhido manualmente na aba Hoje
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
+    if (raw) {
+      const st = { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
+      if ((st.planVersion || 1) < 2 && !st.active) applyPlanV2(st);
+      return st;
+    }
   } catch (e) { /* segue com o plano inicial */ }
-  return planoInicial();
+  return applyPlanV2(planoInicial());
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -137,6 +156,7 @@ const fmtDate = iso => {
   const dt = new Date(y, m - 1, d);
   return `${DIAS[dt.getDay()]}, ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
 };
+const fmtSet = (e, s) => e?.bodyweight ? `${s.reps || 0} reps` : `${s.kg || 0}kg×${s.reps || 0}`;
 const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.abs(s % 60)).padStart(2, '0')}`;
 const num = v => {
   const n = parseFloat(String(v).replace(',', '.'));
@@ -211,6 +231,12 @@ const bestTop = exId => Math.max(0, ...exerciseHistory(exId).map(h => h.top));
 
 // Dupla progressão: bateu o topo da faixa em todas as séries, sobe a carga.
 function suggestion(exercise, last) {
+  if (exercise.bodyweight) {
+    const hit = last && last.sets.length >= Number(exercise.sets) && last.sets.every(s => num(s.reps) >= exercise.repMax);
+    return { type: hit ? 'up' : 'keep', text: hit
+      ? `Sem carga. Você completou ${exercise.sets} × ${exercise.repMax}. Mantenha o ritmo e controle a descida.`
+      : `Sem carga. Meta: ${exercise.sets} séries de ${exercise.repMax} repetições.` };
+  }
   if (!last) return { type: 'keep', text: 'Primeira vez: escolha uma carga que deixe 1 a 2 repetições na reserva.' };
   const allTop = last.sets.length >= Number(exercise.sets) && last.sets.every(s => num(s.reps) >= exercise.repMax);
   const maxKg = Math.max(...last.sets.map(s => num(s.kg)));
@@ -362,7 +388,7 @@ function renderHoje() {
           <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin}–${e.repMax} · ${e.rest}s</div></div>
         ${videoButton(e)}
       </div>
-      ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => `${s.kg || 0}kg×${s.reps || 0}`).join(', ')}</div>` : ''}
+      ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => fmtSet(e, s)).join(', ')}</div>` : ''}
     </div>`;
   }).join('');
   view.innerHTML = html;
@@ -402,14 +428,14 @@ function renderSessao() {
         ${videoButton(e)}
       </div>
       ${e.notes ? `<div class="muted" style="margin-top:6px">${esc(e.notes)}</div>` : ''}
-      ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => `${s.kg || 0}kg×${s.reps || 0}`).join(', ')}</div>` : ''}
+      ${last ? `<div class="muted" style="margin-top:6px">Última vez: ${last.sets.map(s => fmtSet(e, s)).join(', ')}</div>` : ''}
       <div class="hint ${sug.type}">${esc(sug.text)}</div>
       ${en.sets.some(s => s.done && prev > 0 && num(s.kg) > prev) ? `<div class="hint up">🏆 Recorde de carga: acima dos ${fmtKg(prev)} kg anteriores.</div>` : ''}
       <div class="sets">
         <div class="set head"><span class="num">#</span><span>Carga (kg)</span><span>Reps</span><span></span></div>
         ${en.sets.map((s, si) => `<div class="set ${s.done ? 'done' : ''}">
           <span class="num">${s.done && prev > 0 && num(s.kg) > prev ? '🏆' : si + 1}</span>
-          <input inputmode="decimal" value="${esc(s.kg)}" placeholder="kg" data-action="set-input" data-field="kg" data-e="${ei}" data-s="${si}">
+          ${e.bodyweight ? '<span class="num">sem carga</span>' : `<input inputmode="decimal" value="${esc(s.kg)}" placeholder="kg" data-action="set-input" data-field="kg" data-e="${ei}" data-s="${si}">`}
           <input inputmode="numeric" value="${esc(s.reps)}" placeholder="${e.repMin}–${e.repMax}" data-action="set-input" data-field="reps" data-e="${ei}" data-s="${si}">
           <button class="check" data-action="toggle-set" data-e="${ei}" data-s="${si}">✓</button>
         </div>`).join('')}
@@ -507,7 +533,7 @@ function renderTreinos() {
     <div style="margin-top:8px">
       ${w.exercises.map((e, i) => `<div class="list-item">
         <div class="grow"><div>${esc(e.name)}</div>
-          <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax} · ${e.rest}s ${hasAnyVideo(e) ? '· 🎬' : ''}</div></div>
+          <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''} · ${e.rest}s ${hasAnyVideo(e) ? '· 🎬' : ''}</div></div>
         <button class="btn small" data-action="move-ex" data-w="${w.id}" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn small" data-action="move-ex" data-w="${w.id}" data-i="${i}" data-dir="1" ${i === w.exercises.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="btn small" data-action="edit-ex" data-id="${e.id}">Editar</button>
@@ -971,7 +997,7 @@ function markerAction(action, t) {
 
 function editExercise(exId, workoutId) {
   const isNew = !exId;
-  const e = isNew ? ex('', 'Peito', 3, 8, 12, 90) : findExercise(exId).exercise;
+  const e = isNew ? ex('', 'Peito', 3, 6, 10, 90) : findExercise(exId).exercise;
   const wid = isNew ? workoutId : findExercise(exId).workout.id;
   openModal(`<h3>${isNew ? 'Novo exercício' : 'Editar exercício'}</h3>
     <form id="ex-form">
@@ -984,6 +1010,7 @@ function editExercise(exId, workoutId) {
         <div><label>Reps mín.</label><input class="field" name="repMin" type="number" min="1" value="${e.repMin}"></div>
         <div><label>Reps máx.</label><input class="field" name="repMax" type="number" min="1" value="${e.repMax}"></div>
       </div>
+      <label class="row" style="color:var(--text);font-size:15px"><input type="checkbox" name="bodyweight" ${e.bodyweight ? 'checked' : ''}> Sem carga (peso do corpo)</label>
       <label>Descanso entre séries (segundos)</label>
       <input class="field" name="rest" type="number" min="0" step="15" value="${e.rest}">
       <label>Vídeo do aparelho ${e.hasVideo ? '<span class="tag ok">salvo</span>' : ''}</label>
@@ -1011,6 +1038,7 @@ function editExercise(exId, workoutId) {
       repMin,
       repMax: Math.max(repMin, parseInt(f.get('repMax')) || repMin),
       rest: Math.max(0, parseInt(f.get('rest')) || 0),
+      bodyweight: f.get('bodyweight') === 'on',
       videoUrl: f.get('videoUrl').trim(),
       notes: f.get('notes').trim()
     });
@@ -1160,7 +1188,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = planoInicial();
+        state = applyPlanV2(planoInicial());
         state.logs = logs;
         save(); render();
       }
