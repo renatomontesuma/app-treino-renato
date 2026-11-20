@@ -790,7 +790,12 @@ async function saveBulk(btn) {
     if (!sel.value) continue;
     const e = findExercise(sel.value)?.exercise;
     if (!e) continue;
-    try { await videoDB.put(e.id, pendingFiles[sel.dataset.bulk]); e.hasVideo = true; ok++; }
+    // O mesmo exercício em outro dia (mesmo nome) recebe o vídeo também, se ainda não tiver o seu.
+    const twins = state.workouts.flatMap(w => w.exercises).filter(x => x.id !== e.id && norm(x.name) === norm(e.name) && !x.hasVideo);
+    try {
+      for (const x of [e, ...twins]) { await videoDB.put(x.id, pendingFiles[sel.dataset.bulk]); x.hasVideo = true; }
+      ok++;
+    }
     catch (err) { alert(`Não consegui salvar ${pendingFiles[sel.dataset.bulk].name}. O aparelho pode estar sem espaço.`); break; }
   }
   pendingFiles = [];
