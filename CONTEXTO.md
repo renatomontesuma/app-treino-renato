@@ -24,6 +24,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 * Supinos e roscas com halteres: registrar o peso de cada halter.
 * Treina de segunda a sábado. Domingo às vezes (treino opcional).
 * Quer usar vídeos próprios gravados na academia. Enquanto não grava, usa vídeo de exemplo do YouTube.
+* Medidas do braço: relaxado (`bracoD`, `bracoE`) e contraído com o braço levantado, pose de mostrar o bíceps (`bracoDC`, `bracoEC`). Medidas antigas de braço ficaram como relaxado.
 * Textos do app e respostas em português, linguagem simples e direta.
 
 ## Semana atual (plano versão 7)

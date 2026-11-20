@@ -24,8 +24,10 @@ const MEDIDAS = [
   { key: 'cintura', label: 'Cintura', unit: 'cm', dir: 'down' },
   { key: 'abdomen', label: 'Abdômen', unit: 'cm', dir: 'down' },
   { key: 'quadril', label: 'Quadril', unit: 'cm', dir: 'up' },
-  { key: 'bracoD', label: 'Braço direito', unit: 'cm', dir: 'up' },
-  { key: 'bracoE', label: 'Braço esquerdo', unit: 'cm', dir: 'up' },
+  { key: 'bracoD', label: 'Braço direito relaxado', unit: 'cm', dir: 'up' },
+  { key: 'bracoE', label: 'Braço esquerdo relaxado', unit: 'cm', dir: 'up' },
+  { key: 'bracoDC', label: 'Braço direito contraído', unit: 'cm', dir: 'up' },
+  { key: 'bracoEC', label: 'Braço esquerdo contraído', unit: 'cm', dir: 'up' },
   { key: 'antebraco', label: 'Antebraço', unit: 'cm', dir: 'up' },
   { key: 'coxaD', label: 'Coxa direita', unit: 'cm', dir: 'up' },
   { key: 'coxaE', label: 'Coxa esquerda', unit: 'cm', dir: 'up' },
@@ -967,26 +969,39 @@ const COMO_MEDIR = {
   cintura: { line: [60, 92, 17], tip: 'No ponto mais fino do tronco, um pouco acima do umbigo. Barriga solta, sem encolher.' },
   abdomen: { line: [60, 106, 19], tip: 'Na altura do umbigo, barriga solta, no fim de uma expiração normal.' },
   quadril: { line: [60, 121, 22], tip: 'Na parte mais larga do bumbum, com os pés juntos.' },
-  bracoD: { line: [30, 70, 6], tip: 'Braço direito solto ao lado do corpo, no meio entre o ombro e o cotovelo. Se preferir medir contraído, faça sempre do mesmo jeito.' },
-  bracoE: { line: [90, 70, 6], tip: 'Braço esquerdo solto ao lado do corpo, no meio entre o ombro e o cotovelo. Se preferir medir contraído, faça sempre do mesmo jeito.' },
+  bracoD: { line: [30, 70, 6], tip: 'Braço direito solto ao lado do corpo, sem fazer força, no meio entre o ombro e o cotovelo.' },
+  bracoE: { line: [90, 70, 6], tip: 'Braço esquerdo solto ao lado do corpo, sem fazer força, no meio entre o ombro e o cotovelo.' },
+  bracoDC: { line: [21, 47, 11, true], flex: 'D', tip: 'Levante o braço direito na altura do ombro, dobre o cotovelo com a mão fechada para cima e contraia o bíceps com força. Fita em volta da parte mais alta do músculo.' },
+  bracoEC: { line: [99, 47, 11, true], flex: 'E', tip: 'Levante o braço esquerdo na altura do ombro, dobre o cotovelo com a mão fechada para cima e contraia o bíceps com força. Fita em volta da parte mais alta do músculo.' },
   antebraco: { line: [24, 104, 5], tip: 'Na parte mais grossa, logo abaixo do cotovelo, com a mão aberta e o braço solto. Meça sempre o mesmo lado.' },
   coxaD: { line: [50, 145, 9], tip: 'Em pé, peso igual nas duas pernas. Coxa direita, no meio entre a virilha e o joelho.' },
   coxaE: { line: [70, 145, 9], tip: 'Em pé, peso igual nas duas pernas. Coxa esquerda, no meio entre a virilha e o joelho.' },
   panturrilha: { line: [51, 186, 6], tip: 'Em pé, peso igual nas duas pernas, na parte mais grossa da panturrilha. Meça sempre o mesmo lado.' }
 };
 
-function bodySvg(line) {
+// flex: 'D' ou 'E' desenha aquele braço levantado e contraído (pose de mostrar o bíceps).
+// line[3] = true: fita em pé, porque o braço contraído fica na horizontal.
+function bodySvg(line, flex) {
   const side = d => d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (m, x, y) => `${120 - x} ${y}`);
   const arm = 'M37 42 L28 47 L21 92 L30 94 L38 62 Z M21 92 L30 94 L27 136 L19 135 Z';
   const leg = 'M40 123 L59 123 L57 172 L44 172 Z M44 172 L57 172 L55 212 L47 212 Z';
-  const [cx, cy, rx] = line;
+  // Braço do lado direito do corpo (esquerda da imagem): ombro → cotovelo na horizontal, antebraço para cima.
+  const flexed = 'M37 41 L38 57 L6 56 L4 44 Z M3 56 L15 53 L13 17 L2 17 Z';
+  const flexExtras = m => {
+    const x = v => (m ? 120 - v : v);
+    return `<ellipse cx="${x(21)}" cy="43" rx="12" ry="6.5"/><circle cx="${x(7.5)}" cy="12" r="6.5"/>`;
+  };
+  const armD = flex === 'D' ? `<path d="${flexed}"/>${flexExtras(false)}` : `<path d="${arm}"/>`;
+  const armE = flex === 'E' ? `<path d="${side(flexed)}"/>${flexExtras(true)}` : `<path d="${side(arm)}"/>`;
+  const [cx, cy, r, vertical] = line;
+  const thin = Math.max(2, r / 6);
   return `<svg viewBox="0 0 120 222" class="body-fig" role="img" aria-label="Onde passar a fita">
     <g fill="#363d4b" stroke="#5c6576" stroke-width="1.2" stroke-linejoin="round">
       <circle cx="60" cy="19" r="11"/><rect x="55" y="28" width="10" height="11" rx="3"/>
       <path d="M37 41 Q60 35 83 41 L80 70 Q78 88 76 98 Q80 110 81 125 L39 125 Q40 110 44 98 Q42 88 40 70 Z"/>
-      <path d="${arm}"/><path d="${side(arm)}"/><path d="${leg}"/><path d="${side(leg)}"/>
+      ${armD}${armE}<path d="${leg}"/><path d="${side(leg)}"/>
     </g>
-    <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${Math.max(2, rx / 6)}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 2"/>
+    <ellipse cx="${cx}" cy="${cy}" rx="${vertical ? thin : r}" ry="${vertical ? r : thin}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 2"/>
     <text x="4" y="219" font-size="13" font-weight="700" fill="var(--muted)">D</text><text x="106" y="219" font-size="13" font-weight="700" fill="var(--muted)">E</text>
   </svg>`;
 }
@@ -994,7 +1009,7 @@ function bodySvg(line) {
 function measureHelp(key) {
   const g = COMO_MEDIR[key];
   if (!g) return '';
-  return `<div class="measure-help">${g.line ? bodySvg(g.line) : ''}<div class="muted">${g.tip}</div></div>`;
+  return `<div class="measure-help">${g.line ? bodySvg(g.line, g.flex) : ''}<div class="muted">${g.tip}</div></div>`;
 }
 
 function showMeasureGuide() {
