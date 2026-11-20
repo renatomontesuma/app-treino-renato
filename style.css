@@ -175,5 +175,10 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px
 /* Vídeo vertical ou horizontal: ocupa a largura sem passar de 65% da altura da tela. */
 .modal video { height: auto; max-height: 65vh; object-fit: contain; }
 
+details.day { border-top: 1px solid var(--line); padding: 10px 0; }
+details.day:first-of-type { border-top: 0; }
+details.day summary { cursor: pointer; list-style: none; }
+details.day summary::-webkit-details-marker { display: none; }
+details.day .list-item:first-of-type { border-top: 1px solid var(--line); margin-top: 8px; }
 .hidden { display: none !important; }
 .empty { text-align: center; padding: 30px 10px; color: var(--muted); }

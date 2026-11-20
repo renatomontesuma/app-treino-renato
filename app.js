@@ -527,7 +527,7 @@ function renderHoje() {
     const last = lastPerformance(e.id);
     return `<div class="card">
       <div class="row between">
-        <div class="grow"><h3>${esc(e.name)} ${isFocus(e) ? '<span class="tag ok">foco</span>' : ''}</h3>
+        <div class="grow"><h3>${esc(e.name)} ${isFocus(e) ? '<span class="tag ok">foco</span>' : ''} ${e.hasVideo ? '' : '<span class="tag warn">gravar</span>'}</h3>
           <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin}–${e.repMax} · ${e.rest}s</div></div>
         ${videoButton(e)}
       </div>
@@ -625,6 +625,8 @@ function renderSemana() {
   </div>`;
   html = focusCard + html;
 
+  html += renderDayLists();
+
   const vol = weeklyVolume();
   const ref = foco.length
     ? `Grupos em foco: ${FOCO_MIN} a ${SERIES_MAX + 2} séries. Demais grupos: mínimo de ${MANUT_MIN} séries para manutenção.`
@@ -665,6 +667,37 @@ function renderToRecord() {
     ${groups.map(g => `<div style="margin-top:8px"><strong>${DIAS[g.d]}${g.d === 0 ? ' (opcional)' : ''}</strong> <span class="muted">· ${esc(g.w.name)}</span>
       <div class="muted">${g.items.map(e => esc(e.name)).join(' · ')}</div></div>`).join('')}
   </details>`;
+}
+
+// Lista completa de cada dia, na ordem do treino, com a situação do seu vídeo em cada exercício.
+function renderDayLists() {
+  const today = new Date().getDay();
+  const days = [1, 2, 3, 4, 5, 6, 0];
+  const rows = days.map(d => {
+    const w = getWorkout(state.schedule[d]) || (d === 0 ? getWorkout(state.optional?.[0]) : null);
+    if (!w) return `<div class="list-item"><strong class="grow">${DIAS[d]}</strong><span class="muted">Descanso</span></div>`;
+    const missing = w.exercises.filter(e => !e.hasVideo).length;
+    const optional = !state.schedule[d];
+    return `<details class="day" ${d === today ? 'open' : ''}>
+      <summary class="row between">
+        <span class="grow"><strong>${DIAS[d]}</strong>${optional ? ' <span class="tag">opcional</span>' : ''}${d === today ? ' <span class="tag ok">hoje</span>' : ''}
+          <span class="muted" style="display:block">${esc(w.name)} · ${w.exercises.length} exercícios</span></span>
+        ${missing ? `<span class="tag warn">${missing} a gravar</span>` : '<span class="tag ok">vídeos ok</span>'}
+      </summary>
+      ${ordered(w).map((e, i) => `<div class="list-item">
+        <span class="num" style="width:20px">${i + 1}</span>
+        <div class="grow"><div>${esc(e.name)}</div>
+          <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div></div>
+        ${e.hasVideo
+          ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Meu vídeo</button>`
+          : `${hasAnyVideo(e) ? `<button class="btn small" data-action="play" data-id="${e.id}" aria-label="Ver vídeo de referência">▶</button>` : ''}
+             <button class="btn small" data-action="edit-ex" data-id="${e.id}">Gravar</button>`}
+      </div>`).join('')}
+    </details>`;
+  }).join('');
+  return `<div class="card"><h3>Exercícios de cada dia</h3>
+    <div class="muted" style="margin-bottom:6px">Na ordem do treino. "Gravar" abre o envio do seu vídeo daquele exercício. ▶ mostra o vídeo de referência.</div>
+    ${rows}</div>`;
 }
 
 function renderTreinos() {
@@ -1233,7 +1266,7 @@ function editExercise(exId, workoutId) {
     });
     const file = f.get('file');
     if (file && file.size) {
-      try { await videoDB.put(e.id, file); e.hasVideo = true; }
+      try { await videoDB.put(e.id, file); e.hasVideo = true; save(); shareOwnVideos(); }
       catch (err) { alert('Não consegui salvar o vídeo. O aparelho pode estar sem espaço.'); }
     }
     if (isNew) getWorkout(wid).exercises.push(e);
