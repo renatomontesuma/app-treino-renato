@@ -88,7 +88,8 @@ function planoInicial() {
     logs: [],
     active: null,
     focus: {},
-    measures: []
+    measures: [],
+    sources: []
   };
 }
 
@@ -101,7 +102,7 @@ let viewWorkoutId = null; // treino escolhido manualmente na aba Hoje
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { focus: {}, measures: [], ...JSON.parse(raw) };
+    if (raw) return { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
   } catch (e) { /* segue com o plano inicial */ }
   return planoInicial();
 }
@@ -167,6 +168,9 @@ const videoDB = (() => {
     del: key => tx('readwrite', s => s.delete(key))
   };
 })();
+
+const hasAnyVideo = e => !!(e.hasVideo || e.videoUrl || e.videoSrc);
+const isVideoFile = url => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url) || url.startsWith('videos/');
 
 function youtubeId(url) {
   const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
@@ -343,7 +347,7 @@ function renderHoje() {
 }
 
 function videoButton(e) {
-  return (e.hasVideo || e.videoUrl)
+  return hasAnyVideo(e)
     ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Vídeo</button>`
     : `<button class="btn small" data-action="edit-ex" data-id="${e.id}">+ Vídeo</button>`;
 }
@@ -453,11 +457,23 @@ function renderSemana() {
 function renderTreinos() {
   setHeader('Treinos', 'Exercícios, séries e vídeos');
   const allEx = state.workouts.flatMap(w => w.exercises);
-  const withVideo = allEx.filter(e => e.hasVideo || e.videoUrl).length;
+  const withVideo = allEx.filter(hasAnyVideo).length;
   let html = `<div class="card"><h3>Vídeos dos exercícios</h3>
     <div class="muted">${withVideo} de ${allEx.length} exercícios com vídeo. Envie vários de uma vez: o app liga cada arquivo ao exercício pelo nome e você confere antes de salvar.</div>
     <label class="btn primary block" style="margin-top:10px;text-align:center;color:var(--accent-ink);font-size:16px">Enviar vídeos do celular
       <input type="file" accept="video/*" multiple data-action="bulk-videos" hidden></label>
+  </div>
+  <div class="card"><h3>Vídeo longo da galeria</h3>
+    <div class="muted">Para gravações de tela com vários exercícios. Envie o vídeo uma vez e marque o início e o fim de cada exercício. O app toca só o trecho, em repetição.</div>
+    ${state.sources.map(src => {
+      const n = allEx.filter(e => e.videoSrc === src.id).length;
+      return `<div class="list-item"><div class="grow"><div>${esc(src.name)}</div>
+        <div class="muted">${Math.round(src.size / 1048576)} MB · ${n} trecho(s) marcado(s)</div></div>
+        <button class="btn small primary" data-action="open-marker" data-id="${src.id}">Marcar</button>
+        <button class="btn small danger" data-action="delete-source" data-id="${src.id}">×</button></div>`;
+    }).join('')}
+    <label class="btn block" style="margin-top:10px;text-align:center;color:var(--text);font-size:16px">Adicionar vídeo longo
+      <input type="file" accept="video/*" data-action="add-source" hidden></label>
   </div>`;
   html += state.workouts.map(w => `<div class="card">
     <div class="row between">
@@ -467,7 +483,7 @@ function renderTreinos() {
     <div style="margin-top:8px">
       ${w.exercises.map((e, i) => `<div class="list-item">
         <div class="grow"><div>${esc(e.name)}</div>
-          <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax} · ${e.rest}s ${(e.hasVideo || e.videoUrl) ? '· 🎬' : ''}</div></div>
+          <div class="muted">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax} · ${e.rest}s ${hasAnyVideo(e) ? '· 🎬' : ''}</div></div>
         <button class="btn small" data-action="move-ex" data-w="${w.id}" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="btn small" data-action="move-ex" data-w="${w.id}" data-i="${i}" data-dir="1" ${i === w.exercises.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="btn small" data-action="edit-ex" data-id="${e.id}">Editar</button>
@@ -624,7 +640,7 @@ function bestMatch(fileName, list) {
     const ew = norm(e.name).split(' ').filter(w => w.length > 2);
     if (!ew.length) return;
     const hits = ew.filter(w => words.has(w)).length;
-    const score = hits / ew.length + (e.hasVideo || e.videoUrl ? 0 : 0.01);
+    const score = hits / ew.length + (hasAnyVideo(e) ? 0 : 0.01);
     if (hits && score > bestScore) { best = e; bestScore = score; }
   });
   return best;
@@ -635,7 +651,7 @@ function bulkVideos(files) {
   pendingFiles = [...files];
   const list = state.workouts.flatMap(w => w.exercises.map(e => ({ ...e, wname: w.name })));
   const opts = sel => `<option value="">Não usar</option>` + list.map(e =>
-    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${e.hasVideo || e.videoUrl ? ' ✓' : ''}</option>`).join('');
+    `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)} (${esc(e.wname.split(':')[0])})${hasAnyVideo(e) ? ' ✓' : ''}</option>`).join('');
   openModal(`<h3>Ligar vídeos aos exercícios</h3>
     <div class="muted">Confira cada vídeo. ✓ indica exercício que já tem vídeo (será substituído).</div>
     ${pendingFiles.map((f, i) => `<label>${esc(f.name)} <span class="muted">(${Math.round(f.size / 1048576)} MB)</span></label>
@@ -667,9 +683,12 @@ let modalUrl = null;
 
 function openModal(html) { modalBody.innerHTML = html; modal.classList.remove('hidden'); }
 function closeModal() {
+  const wasMarking = !!mk;
+  mk = null;
   modal.classList.add('hidden');
   modalBody.innerHTML = '';
   if (modalUrl) { URL.revokeObjectURL(modalUrl); modalUrl = null; }
+  if (wasMarking) render();
 }
 
 async function playVideo(exId) {
@@ -681,18 +700,143 @@ async function playVideo(exId) {
     const blob = await videoDB.get(e.id).catch(() => null);
     if (blob) { modalUrl = URL.createObjectURL(blob); player = `<video src="${modalUrl}" controls playsinline autoplay></video>`; }
   }
+  let clip = false;
+  if (!player && e.videoSrc) {
+    const blob = await videoDB.get(e.videoSrc).catch(() => null);
+    if (blob) {
+      modalUrl = URL.createObjectURL(blob);
+      player = `<video id="clip" src="${modalUrl}#t=${e.videoStart},${e.videoEnd}" controls playsinline autoplay muted></video>
+        <div class="muted" style="margin-top:6px">Trecho ${fmtTime(Math.round(e.videoStart))} a ${fmtTime(Math.round(e.videoEnd))}, em repetição.</div>`;
+      clip = true;
+    }
+  }
   if (!player && e.videoUrl) {
     const yt = youtubeId(e.videoUrl);
+    const host = (e.videoUrl.match(/^https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || 'link';
     player = yt
       ? `<iframe src="https://www.youtube.com/embed/${yt}?rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
-      : `<video src="${esc(e.videoUrl)}" controls playsinline></video>
-         <p><a href="${esc(e.videoUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">Abrir link do vídeo</a></p>`;
+      : isVideoFile(e.videoUrl)
+        ? `<video src="${esc(e.videoUrl)}" controls playsinline></video>`
+        : `<a class="btn primary block" style="text-align:center;text-decoration:none" href="${esc(e.videoUrl)}" target="_blank" rel="noopener">Abrir vídeo ${host.includes('instagram') ? 'no Instagram' : 'em ' + esc(host)}</a>`;
   }
   if (!player) player = `<div class="empty">Vídeo não encontrado neste aparelho. Envie o arquivo de novo em Treinos > Editar.</div>`;
   openModal(`<h3 style="margin-right:30px">${esc(e.name)}</h3>
     <div class="muted" style="margin-bottom:10px">${esc(e.muscle)} · ${e.sets} × ${e.repMin}–${e.repMax}</div>
     ${player}
     ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}`);
+  if (clip) loopClip(document.getElementById('clip'), e.videoStart, e.videoEnd);
+}
+
+// Mantém o vídeo dentro do trecho do exercício.
+function loopClip(v, start, end) {
+  if (!v) return;
+  v.addEventListener('loadedmetadata', () => { v.currentTime = start; v.play().catch(() => {}); });
+  v.addEventListener('timeupdate', () => {
+    if (v.currentTime >= end || v.currentTime < start - 1) { v.currentTime = start; v.play().catch(() => {}); }
+  });
+}
+
+/* ================= Marcação de trechos ================= */
+
+let mk = null; // { src, start, end, previewEnd }
+
+async function addSource(file) {
+  const id = 'src_' + uid();
+  try { await videoDB.put(id, file); }
+  catch (err) { alert('Não consegui salvar o vídeo. Libere espaço no aparelho e tente de novo.'); return; }
+  state.sources.push({ id, name: file.name || 'Vídeo da galeria', size: file.size, date: todayISO() });
+  save(); render();
+  openMarker(id);
+}
+
+async function openMarker(srcId) {
+  const blob = await videoDB.get(srcId).catch(() => null);
+  if (!blob) { alert('Vídeo não encontrado neste aparelho.'); return; }
+  modalUrl = URL.createObjectURL(blob);
+  mk = { src: srcId, start: null, end: null, previewEnd: null };
+  openModal(`<h3>Marcar exercícios</h3>
+    <div class="muted" style="margin-bottom:8px">1. Escolha o exercício. 2. Pare o vídeo onde ele começa e toque em Início. 3. Pare onde termina e toque em Fim. 4. Salve.</div>
+    <video id="mk-video" src="${modalUrl}" controls playsinline muted></video>
+    <div class="row wrap" style="margin:8px 0">
+      <button class="btn small" data-action="mk-seek" data-d="-10">−10s</button>
+      <button class="btn small" data-action="mk-seek" data-d="-2">−2s</button>
+      <button class="btn small" data-action="mk-seek" data-d="2">+2s</button>
+      <button class="btn small" data-action="mk-seek" data-d="10">+10s</button>
+      <button class="btn small" data-action="mk-speed" id="mk-speed">Velocidade 1x</button>
+    </div>
+    <div id="mk-panel"></div>`);
+  const v = document.getElementById('mk-video');
+  v.addEventListener('timeupdate', () => {
+    if (mk && mk.previewEnd != null && v.currentTime >= mk.previewEnd) { v.pause(); mk.previewEnd = null; }
+  });
+  renderMarkerPanel();
+}
+
+function renderMarkerPanel(selected) {
+  const panel = document.getElementById('mk-panel');
+  if (!panel || !mk) return;
+  const list = state.workouts.flatMap(w => w.exercises.map(e => ({ e, w })));
+  const marked = list.filter(x => x.e.videoSrc === mk.src).sort((a, b) => a.e.videoStart - b.e.videoStart);
+  const sel = selected ?? list.find(x => !hasAnyVideo(x.e))?.e.id ?? list[0]?.e.id;
+  const t = v => v == null ? '--:--' : fmtTime(Math.round(v));
+  panel.innerHTML = `
+    <label>Exercício</label>
+    <select class="field" id="mk-ex">${state.workouts.map(w => `<optgroup label="${esc(w.name)}">${w.exercises.map(e =>
+      `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.name)}${hasAnyVideo(e) ? ' ✓' : ''}</option>`).join('')}</optgroup>`).join('')}</select>
+    <div class="grid-2" style="margin-top:8px;gap:8px">
+      <button class="btn" data-action="mk-start">Início: <strong>${t(mk.start)}</strong></button>
+      <button class="btn" data-action="mk-end">Fim: <strong>${t(mk.end)}</strong></button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn grow" data-action="mk-preview" ${mk.start == null || mk.end == null ? 'disabled' : ''}>Ver trecho</button>
+      <button class="btn primary grow" data-action="mk-save" ${mk.start == null || mk.end == null ? 'disabled' : ''}>Salvar trecho</button>
+    </div>
+    <h3 style="margin-top:16px">Trechos marcados (${marked.length})</h3>
+    ${marked.length ? marked.map(({ e }) => `<div class="list-item"><div class="grow"><div>${esc(e.name)}</div>
+      <div class="muted">${esc(e.muscle)} · ${t(e.videoStart)} a ${t(e.videoEnd)}</div></div>
+      <button class="btn small" data-action="mk-goto" data-id="${e.id}">Ver</button>
+      <button class="btn small danger" data-action="mk-remove" data-id="${e.id}">×</button></div>`).join('')
+      : '<div class="muted">Nenhum trecho ainda.</div>'}`;
+}
+
+function markerAction(action, t) {
+  const v = document.getElementById('mk-video');
+  if (!v || !mk) return;
+  const exSel = document.getElementById('mk-ex')?.value;
+  switch (action) {
+    case 'mk-seek': v.currentTime = Math.max(0, v.currentTime + Number(t.dataset.d)); return;
+    case 'mk-speed': {
+      const speeds = [1, 2, 4];
+      v.playbackRate = speeds[(speeds.indexOf(v.playbackRate) + 1) % speeds.length];
+      t.textContent = `Velocidade ${v.playbackRate}x`;
+      return;
+    }
+    case 'mk-start': mk.start = v.currentTime; if (mk.end != null && mk.end <= mk.start) mk.end = null; break;
+    case 'mk-end':
+      if (mk.start != null && v.currentTime <= mk.start) { alert('O fim precisa vir depois do início.'); return; }
+      mk.end = v.currentTime; v.pause(); break;
+    case 'mk-preview': v.currentTime = mk.start; mk.previewEnd = mk.end; v.playbackRate = 1; v.play().catch(() => {}); return;
+    case 'mk-save': {
+      const e = findExercise(exSel)?.exercise;
+      if (!e) return;
+      Object.assign(e, { videoSrc: mk.src, videoStart: Math.round(mk.start * 10) / 10, videoEnd: Math.round(mk.end * 10) / 10 });
+      save();
+      mk.start = mk.end = null;
+      renderMarkerPanel(null);
+      return;
+    }
+    case 'mk-goto': {
+      const e = findExercise(t.dataset.id)?.exercise;
+      if (e) { v.currentTime = e.videoStart; mk.previewEnd = e.videoEnd; v.play().catch(() => {}); }
+      return;
+    }
+    case 'mk-remove': {
+      const e = findExercise(t.dataset.id)?.exercise;
+      if (e) { delete e.videoSrc; delete e.videoStart; delete e.videoEnd; save(); }
+      break;
+    }
+  }
+  renderMarkerPanel(exSel);
 }
 
 function editExercise(exId, workoutId) {
@@ -715,6 +859,7 @@ function editExercise(exId, workoutId) {
       <label>Vídeo do aparelho ${e.hasVideo ? '<span class="tag ok">salvo</span>' : ''}</label>
       <input class="field" name="file" type="file" accept="video/*">
       ${e.hasVideo ? `<button type="button" class="btn small danger" style="margin-top:6px" data-action="remove-video" data-id="${e.id}">Remover vídeo salvo</button>` : ''}
+      ${e.videoSrc ? `<div class="hint up">Trecho do vídeo longo: ${fmtTime(Math.round(e.videoStart))} a ${fmtTime(Math.round(e.videoEnd))}. Para mudar, use Treinos > Vídeo longo > Marcar.</div>` : ''}
       <label>Ou link do vídeo (YouTube, Google Drive ou videos/arquivo.mp4 do repositório)</label>
       <input class="field" name="videoUrl" type="text" inputmode="url" placeholder="https://" value="${esc(e.videoUrl)}">
       <label>Observações de execução</label>
@@ -814,6 +959,18 @@ document.addEventListener('click', async ev => {
       if (confirm('Apagar este registro de medidas?')) { state.measures = state.measures.filter(m => m.id !== id); save(); render(); }
       break;
     case 'save-bulk': saveBulk(t); break;
+    case 'open-marker': openMarker(id); break;
+    case 'delete-source': {
+      if (!confirm('Apagar este vídeo longo? Os trechos marcados nele deixam de funcionar.')) break;
+      await videoDB.del(id).catch(() => {});
+      state.sources = state.sources.filter(x => x.id !== id);
+      state.workouts.forEach(w => w.exercises.forEach(e => { if (e.videoSrc === id) { delete e.videoSrc; delete e.videoStart; delete e.videoEnd; } }));
+      save(); render();
+      break;
+    }
+    case 'mk-seek': case 'mk-speed': case 'mk-start': case 'mk-end': case 'mk-preview':
+    case 'mk-save': case 'mk-goto': case 'mk-remove':
+      markerAction(action, t); break;
     case 'timer-add': timerEnd += 15000; beeped = false; tickTimer(); break;
     case 'timer-stop': stopTimer(); break;
     case 'play': playVideo(id); break;
@@ -893,6 +1050,10 @@ document.addEventListener('change', ev => {
     case 'pick-workout': viewWorkoutId = t.value || null; render(); break;
     case 'schedule': state.schedule[t.dataset.day] = t.value || null; save(); render(); break;
     case 'rename-workout': getWorkout(t.dataset.id).name = t.value.trim() || 'Treino'; save(); break;
+    case 'add-source':
+      if (t.files[0]) addSource(t.files[0]);
+      t.value = '';
+      break;
     case 'bulk-videos':
       if (t.files.length) bulkVideos(t.files);
       t.value = '';
@@ -903,7 +1064,7 @@ document.addEventListener('change', ev => {
       file.text().then(txt => {
         const data = JSON.parse(txt);
         if (!Array.isArray(data.workouts) || !data.schedule) throw new Error();
-        state = { logs: [], active: null, focus: {}, measures: [], ...data };
+        state = { logs: [], active: null, focus: {}, measures: [], sources: [], ...data };
         save(); render();
         alert('Backup importado.');
       }).catch(() => alert('Arquivo de backup inválido.'));
