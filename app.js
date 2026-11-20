@@ -95,7 +95,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 9;
+const PLAN_VERSION = 10;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -103,6 +103,8 @@ const VIDEOS_INTERNET = {
   'Supino reto com barra': 'TukK2WRI4C4',
   'Supino inclinado com halteres': 'G-i3jMIbDmo',
   'Desenvolvimento com halteres': 'IDOZyXHq7aI',
+  // Sem exemplo próprio da máquina: usa o dos halteres, mesmo movimento.
+  'Desenvolvimento na máquina': 'IDOZyXHq7aI',
   'Elevação lateral': 'gURBTU9VSJg',
   'Tríceps na polia': 'Npv_xl76XWM',
   'Tríceps francês': 'o_mAVpMIBJs',
@@ -239,6 +241,22 @@ function applyAbdominalV9(st) {
   return st;
 }
 
+// No sábado (Ombros e braços) o desenvolvimento passa para a máquina. Na segunda (Empurrar) continua com halteres.
+// Só troca o do sábado; carga de máquina não se compara com halteres, então o histórico antigo fica separado.
+function applyDesenvolvimentoV10(st) {
+  const w = st.workouts.find(x => x.id === 'ombros-bracos');
+  const e = w?.exercises.find(x => x.name === 'Desenvolvimento com halteres');
+  if (e) {
+    (st.logs || []).forEach(l => l.entries.forEach(en => { if (en.exId === e.id) en.exId = 'halteres_' + e.id; }));
+    e.name = 'Desenvolvimento na máquina';
+    if (e.notes === 'Registre o peso de cada halter.') e.notes = '';
+    const oldDefault = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET['Desenvolvimento com halteres']}`;
+    if (!e.videoUrl || e.videoUrl === oldDefault) e.videoUrl = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET['Desenvolvimento na máquina']}`;
+  }
+  st.planVersion = 10;
+  return st;
+}
+
 // Exercício repetido em outro dia (mesmo nome) usa o seu vídeo, se ele ainda não tiver um.
 async function shareOwnVideos() {
   const all = state.workouts.flatMap(w => w.exercises);
@@ -284,10 +302,11 @@ function load() {
       if ((st.planVersion || 1) === 6) applySemanaV7(st);
       if ((st.planVersion || 1) === 7 && !st.active) applyPuxadaV8(st);
       if ((st.planVersion || 1) === 8 && !st.active) applyAbdominalV9(st);
+      if ((st.planVersion || 1) === 9 && !st.active) applyDesenvolvimentoV10(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyAbdominalV9(applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))))));
+  return applyDesenvolvimentoV10(applyAbdominalV9(applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))))))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }

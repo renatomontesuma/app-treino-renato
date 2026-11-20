@@ -46,12 +46,13 @@ Cada grupo treina 2 vezes por semana, com pelo menos 48 h entre os estímulos.
 * Remada curvada → Remada cavalinho apoiada.
 * Remada baixa → Remada sentada articulada.
 * Puxada frontal (polia) → Puxada articulada (máquina de anilhas).
+* Sábado (Ombros e braços): Desenvolvimento com halteres → Desenvolvimento na máquina. Na segunda (Empurrar) continua com halteres.
 * Rosca alternada → Rosca simultânea sentado.
 * Prancha removida.
 
 ## Migrações do plano salvo no celular
 
-O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 9):
+O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 10):
 
 * v2: séries 3 × 6–10 e abdominal 5 × 60.
 * v3: links do YouTube (`VIDEOS_INTERNET`) só onde não há link.
@@ -59,6 +60,7 @@ O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma m
 * v7: semana de 6 dias, treino "Ombros e braços" e domingo opcional (`state.optional`).
 * v8: Puxada frontal → Puxada articulada, para bater com o vídeo próprio `puxada-articulada`.
 * v9: Abdominal na máquina no fim de todos os treinos que não tinham, copiando séries, link, trecho e observação do abdominal existente.
+* v10: só no treino `ombros-bracos`, Desenvolvimento com halteres → Desenvolvimento na máquina, com histórico antigo separado (prefixo `halteres_`).
 
 Regra: nunca apagar histórico, vídeos ou links que o usuário colocou. Migrações só rodam sem treino em andamento.
 
