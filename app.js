@@ -95,7 +95,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 8;
+const PLAN_VERSION = 9;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -224,6 +224,21 @@ function applyPuxadaV8(st) {
   return st;
 }
 
+// Renato faz abdominal na máquina todos os dias: entra no fim de todos os treinos que ainda não têm.
+// Copia séries, link, trecho do personal e observação do abdominal que já existe. O vídeo próprio
+// é repassado por shareOwnVideos(), que liga exercícios de mesmo nome.
+function applyAbdominalV9(st) {
+  const base = st.workouts.flatMap(w => w.exercises).find(isAbMachine)
+    || { ...ex('Abdominal na máquina', 'Abdômen', 5, 60, 60, 60), bodyweight: true, videoUrl: `https://www.youtube.com/watch?v=${VIDEOS_INTERNET['Abdominal na máquina']}` };
+  st.workouts.forEach(w => {
+    if (w.exercises.some(isAbMachine)) return;
+    const { id, hasVideo, ...copy } = base;
+    w.exercises.push({ ...copy, id: uid(), hasVideo: false });
+  });
+  st.planVersion = 9;
+  return st;
+}
+
 // Exercício repetido em outro dia (mesmo nome) usa o seu vídeo, se ele ainda não tiver um.
 async function shareOwnVideos() {
   const all = state.workouts.flatMap(w => w.exercises);
@@ -268,10 +283,11 @@ function load() {
       if ((st.planVersion || 1) === 5 && !st.active) applyRoscaV6(st);
       if ((st.planVersion || 1) === 6) applySemanaV7(st);
       if ((st.planVersion || 1) === 7 && !st.active) applyPuxadaV8(st);
+      if ((st.planVersion || 1) === 8 && !st.active) applyAbdominalV9(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())))))));
+  return applyAbdominalV9(applyPuxadaV8(applySemanaV7(applyRoscaV6(applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))))))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }

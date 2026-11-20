@@ -7,7 +7,7 @@ Este arquivo resume tudo o que foi decidido na primeira sessão de desenvolvimen
 App pessoal de treino para hipertrofia (ganho de massa muscular). Página web instalável no celular (PWA), sem servidor e sem login. Tudo em HTML, CSS e JavaScript puro, sem build.
 
 * `index.html`, `style.css`, `app.js`: o app.
-* `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) a cada mudança de arquivo do app.
+* `sw.js`: cache offline. Suba a versão do cache (`treino-vN`) a cada mudança de arquivo do app. O app procura versão nova sempre que volta à tela e recarrega sozinho (durante um treino só mostra um aviso). Isso existe porque o iPhone retoma o app do segundo plano sem recarregar.
 * `manifest.json`, `icon.svg`: instalação na tela inicial.
 * Publicação: GitHub Pages ativo (repositório público) a partir do branch `claude/eager-thompson-l53kq5`, pasta raiz. Endereço: https://renatomontesuma.github.io/app-treino-renato/
 
@@ -20,7 +20,7 @@ App pessoal de treino para hipertrofia (ganho de massa muscular). Página web in
 ## Preferências do usuário (respeitar sempre)
 
 * Padrão de séries: 3 séries de 6 a 10 repetições em todos os exercícios.
-* Exceção: Abdominal na máquina, 5 séries de 60 repetições, sem carga.
+* Exceção: Abdominal na máquina, 5 séries de 60 repetições, sem carga. Faz todos os dias: está no fim de todos os treinos.
 * Supinos e roscas com halteres: registrar o peso de cada halter.
 * Treina de segunda a sábado. Domingo às vezes (treino opcional).
 * Quer usar vídeos próprios gravados na academia. Enquanto não grava, usa vídeo de exemplo do YouTube.
@@ -51,13 +51,14 @@ Cada grupo treina 2 vezes por semana, com pelo menos 48 h entre os estímulos.
 
 ## Migrações do plano salvo no celular
 
-O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 8):
+O celular guarda o plano antigo. Cada mudança no plano padrão precisa de uma migração em `load()` (`app.js`), controlada por `planVersion` (`PLAN_VERSION`, hoje 9):
 
 * v2: séries 3 × 6–10 e abdominal 5 × 60.
 * v3: links do YouTube (`VIDEOS_INTERNET`) só onde não há link.
 * v4, v5, v6: trocas de exercício via `swapExercises()`. O histórico antigo fica separado (exId com prefixo) porque cargas de aparelhos diferentes não se comparam. Vídeo próprio, trecho do personal e link manual são mantidos.
 * v7: semana de 6 dias, treino "Ombros e braços" e domingo opcional (`state.optional`).
 * v8: Puxada frontal → Puxada articulada, para bater com o vídeo próprio `puxada-articulada`.
+* v9: Abdominal na máquina no fim de todos os treinos que não tinham, copiando séries, link, trecho e observação do abdominal existente.
 
 Regra: nunca apagar histórico, vídeos ou links que o usuário colocou. Migrações só rodam sem treino em andamento.
 
@@ -88,7 +89,7 @@ Na análise, comentar enquadramento (de lado, corpo inteiro, celular na altura d
 ## Pendências
 
 * Gravar os 26 exercícios que ainda usam vídeo de exemplo (lista em Treinos > Falta gravar).
-* Glúteos, panturrilhas, abdômen e trapézio abaixo de 10 séries semanais. Avaliar com o usuário.
+* Glúteos, panturrilhas e trapézio abaixo de 10 séries semanais. Avaliar com o usuário. (Abdômen resolvido: abdominal todos os dias.)
 
 
 ## Testes
