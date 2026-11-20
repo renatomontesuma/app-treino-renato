@@ -169,8 +169,11 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px
   background: none; border: 0; font-size: 28px; color: var(--muted);
 }
 .modal video, .modal iframe {
-  width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; background: #000;
+  width: 100%; border: 0; border-radius: 10px; background: #000; display: block;
 }
+.modal iframe { aspect-ratio: 16 / 9; }
+/* Vídeo vertical ou horizontal: ocupa a largura sem passar de 65% da altura da tela. */
+.modal video { height: auto; max-height: 65vh; object-fit: contain; }
 
 .hidden { display: none !important; }
 .empty { text-align: center; padding: 30px 10px; color: var(--muted); }
