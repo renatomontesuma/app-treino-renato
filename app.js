@@ -538,9 +538,10 @@ function renderHoje() {
 }
 
 function videoButton(e) {
+  if (e.hasVideo) return `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Meu vídeo</button>`;
   return hasAnyVideo(e)
-    ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Vídeo</button>`
-    : `<button class="btn small" data-action="edit-ex" data-id="${e.id}">+ Vídeo</button>`;
+    ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ Exemplo</button>`
+    : `<button class="btn small" data-action="edit-ex" data-id="${e.id}">Gravar</button>`;
 }
 
 function renderSessao() {
@@ -669,6 +670,16 @@ function renderToRecord() {
   </details>`;
 }
 
+// Dias abertos na lista. Começa com o dia de hoje e se mantém quando a tela é redesenhada.
+let openDays = null;
+document.addEventListener('toggle', ev => {
+  const el = ev.target;
+  if (!el.matches || !el.matches('details.day')) return;
+  if (!openDays) openDays = new Set([new Date().getDay()]);
+  const d = Number(el.dataset.day);
+  el.open ? openDays.add(d) : openDays.delete(d);
+}, true);
+
 // Lista completa de cada dia, na ordem do treino, com a situação do seu vídeo em cada exercício.
 function renderDayLists() {
   const today = new Date().getDay();
@@ -678,7 +689,8 @@ function renderDayLists() {
     if (!w) return `<div class="list-item"><strong class="grow">${DIAS[d]}</strong><span class="muted">Descanso</span></div>`;
     const missing = w.exercises.filter(e => !e.hasVideo).length;
     const optional = !state.schedule[d];
-    return `<details class="day" ${d === today ? 'open' : ''}>
+    const isOpen = openDays ? openDays.has(d) : d === today;
+    return `<details class="day" data-day="${d}" ${isOpen ? 'open' : ''}>
       <summary class="row between">
         <span class="grow"><strong>${DIAS[d]}</strong>${optional ? ' <span class="tag">opcional</span>' : ''}${d === today ? ' <span class="tag ok">hoje</span>' : ''}
           <span class="muted" style="display:block">${esc(w.name)} · ${w.exercises.length} exercícios</span></span>
@@ -690,13 +702,13 @@ function renderDayLists() {
           <div class="muted">${esc(e.muscle)} · ${effSets(e)} × ${e.repMin === e.repMax ? e.repMax : e.repMin + '–' + e.repMax}${e.bodyweight ? ' sem carga' : ''}</div></div>
         ${e.hasVideo
           ? `<button class="btn small video-btn" data-action="play" data-id="${e.id}">▶ Meu vídeo</button>`
-          : `${hasAnyVideo(e) ? `<button class="btn small" data-action="play" data-id="${e.id}" aria-label="Ver vídeo de referência">▶</button>` : ''}
+          : `${hasAnyVideo(e) ? `<button class="btn small" data-action="play" data-id="${e.id}">▶ Exemplo</button>` : ''}
              <button class="btn small" data-action="edit-ex" data-id="${e.id}">Gravar</button>`}
       </div>`).join('')}
     </details>`;
   }).join('');
   return `<div class="card"><h3>Exercícios de cada dia</h3>
-    <div class="muted" style="margin-bottom:6px">Na ordem do treino. "Gravar" abre o envio do seu vídeo daquele exercício. ▶ mostra o vídeo de referência.</div>
+    <div class="muted" style="margin-bottom:6px">Na ordem do treino. Sem vídeo seu, o exercício mostra um exemplo. Assista, grave o seu em "Gravar" e ele substitui o exemplo.</div>
     ${rows}</div>`;
 }
 
@@ -1100,7 +1112,8 @@ async function playVideo(exId, which) {
     ${tabs}
     ${player}
     ${e.notes ? `<p class="muted">${esc(e.notes)}</p>` : ''}
-    ${!e.hasVideo ? `<button class="btn small block" style="margin-top:10px" data-action="edit-ex" data-id="${e.id}">+ Enviar meu vídeo deste exercício</button>` : ''}`);
+    ${!e.hasVideo ? `<div class="hint keep" style="margin-top:10px">${cur === 'personal' ? 'Vídeo do personal' : 'Vídeo de exemplo'}. Grave o seu na mesma posição e ele passa a abrir no lugar deste.</div>
+      <button class="btn primary block" data-action="edit-ex" data-id="${e.id}">Gravar o meu e substituir</button>` : ''}`);
   if (clip) loopClip(document.getElementById('clip'), e.videoStart, e.videoEnd);
 }
 
