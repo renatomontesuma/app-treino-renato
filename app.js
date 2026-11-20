@@ -48,8 +48,8 @@ function planoInicial() {
   ]};
   const puxar = { id: 'puxar', name: 'Puxar: costas e bíceps', exercises: [
     ex('Puxada frontal', 'Costas', 4, 8, 12, 90),
-    ex('Remada curvada', 'Costas', 4, 6, 10, 120),
-    ex('Remada baixa', 'Costas', 3, 10, 12, 90),
+    ex('Remada cavalinho apoiada', 'Costas', 4, 6, 10, 120),
+    ex('Remada sentada articulada', 'Costas', 3, 10, 12, 90),
     ex('Crucifixo inverso', 'Ombros', 3, 12, 15, 60),
     ex('Encolhimento', 'Trapézio', 3, 10, 15, 60),
     ex('Rosca direta', 'Bíceps', 4, 8, 12, 60),
@@ -94,7 +94,7 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 4;
+const PLAN_VERSION = 5;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
@@ -108,6 +108,8 @@ const VIDEOS_INTERNET = {
   'Puxada frontal': 'BOW9my4J_ek',
   'Remada curvada': 's4jeKLRghTM',
   'Remada baixa': '2YebbYuuBJQ',
+  'Remada cavalinho apoiada': '1irSxCGkkpY',
+  'Remada sentada articulada': 'iquR4cGPHOU',
   'Crucifixo inverso': 'r1efeCcUW-8',
   'Encolhimento': 'BrwUPSLC_hE',
   'Rosca direta': '85f7ODu2ztA',
@@ -145,20 +147,32 @@ function applyVideosV3(st) {
 
 // Renato faz os supinos com halteres. Troca as versões com barra pela versão com halteres.
 const SUPINO_HALTERES = { 'Supino reto com barra': 'Supino reto com halteres', 'Supino inclinado com barra': 'Supino reto com halteres' };
-function applySupinoV4(st) {
+// Troca um exercício por outro no mesmo lugar do treino. Mantém vídeo próprio, trecho do personal e link
+// colocado à mão. Carga de um equipamento não se compara com a de outro: o histórico antigo fica separado.
+function swapExercises(st, map, tag) {
   st.workouts.forEach(w => w.exercises.forEach(e => {
-    const novo = SUPINO_HALTERES[e.name];
+    const novo = map[e.name];
     if (!novo) return;
     const oldDefault = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET[e.name]}`;
-    // Carga com barra não se compara com carga por halter: o histórico com barra fica separado e o novo começa do zero.
-    (st.logs || []).forEach(l => l.entries.forEach(en => { if (en.exId === e.id) en.exId = 'barra_' + e.id; }));
+    (st.logs || []).forEach(l => l.entries.forEach(en => { if (en.exId === e.id) en.exId = tag + '_' + e.id; }));
     e.name = novo;
     if (!e.videoUrl || e.videoUrl === oldDefault) e.videoUrl = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET[novo]}`;
   }));
+}
+
+function applySupinoV4(st) {
+  swapExercises(st, SUPINO_HALTERES, 'barra');
   st.workouts.forEach(w => w.exercises.forEach(e => {
     if (/halteres/i.test(e.name) && /supino/i.test(e.name) && !e.notes) e.notes = 'Registre o peso de cada halter.';
   }));
   st.planVersion = 4;
+  return st;
+}
+
+// Remadas nas máquinas que o Renato usa. A cavalinho apoiada poupa a lombar em relação à remada curvada.
+function applyRemadasV5(st) {
+  swapExercises(st, { 'Remada curvada': 'Remada cavalinho apoiada', 'Remada baixa': 'Remada sentada articulada' }, 'remada');
+  st.planVersion = 5;
   return st;
 }
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
@@ -188,10 +202,11 @@ function load() {
       if ((st.planVersion || 1) < 2 && !st.active) applyPlanV2(st);
       if ((st.planVersion || 1) === 2) applyVideosV3(st);
       if ((st.planVersion || 1) === 3 && !st.active) applySupinoV4(st);
+      if ((st.planVersion || 1) === 4 && !st.active) applyRemadasV5(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())));
+  return applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -1282,7 +1297,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())));
+        state = applyRemadasV5(applySupinoV4(applyVideosV3(applyPlanV2(planoInicial()))));
         state.logs = logs;
         save(); render();
       }
