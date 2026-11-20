@@ -182,3 +182,14 @@ details.day summary::-webkit-details-marker { display: none; }
 details.day .list-item:first-of-type { border-top: 1px solid var(--line); margin-top: 8px; }
 .hidden { display: none !important; }
 .empty { text-align: center; padding: 30px 10px; color: var(--muted); }
+
+/* Como medir */
+.help-btn {
+  width: 22px; height: 22px; flex: none; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card-2); color: var(--accent);
+  font-size: 13px; font-weight: 700; line-height: 20px;
+}
+.measure-help { display: flex; gap: 10px; align-items: center; margin: 6px 0 4px; font-size: 13px; }
+.help-slot .measure-help { flex-direction: column; align-items: stretch; text-align: left; }
+.body-fig { width: 110px; flex: none; height: auto; }
+.help-slot .body-fig { width: 100%; max-width: 130px; margin: 0 auto; display: block; }

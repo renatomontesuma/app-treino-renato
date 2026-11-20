@@ -920,6 +920,55 @@ function profileCard() {
     </div></div>`;
 }
 
+/* ---------- Como medir: figura com a posição da fita ---------- */
+
+// Figura de frente. O lado direito do corpo aparece à esquerda da imagem (D) e o esquerdo à direita (E).
+// line: onde passa a fita [centro x, altura y, meia largura].
+const COMO_MEDIR = {
+  peso: { tip: 'De manhã, em jejum, depois de ir ao banheiro, com pouca roupa. Use sempre a mesma balança.' },
+  gordura: { tip: 'Use o resultado da bioimpedância ou da avaliação com adipômetro. Compare sempre pelo mesmo método e no mesmo horário.' },
+  ombros: { line: [60, 47, 33], tip: 'Fita em volta dos ombros, na parte mais larga, passando por cima dos braços. Braços soltos ao lado do corpo.' },
+  peitoral: { line: [60, 60, 21], tip: 'Fita por baixo das axilas, na linha dos mamilos. Respire normal e meça sem estufar o peito.' },
+  cintura: { line: [60, 92, 17], tip: 'No ponto mais fino do tronco, um pouco acima do umbigo. Barriga solta, sem encolher.' },
+  abdomen: { line: [60, 106, 19], tip: 'Na altura do umbigo, barriga solta, no fim de uma expiração normal.' },
+  quadril: { line: [60, 121, 22], tip: 'Na parte mais larga do bumbum, com os pés juntos.' },
+  bracoD: { line: [30, 70, 6], tip: 'Braço direito solto ao lado do corpo, no meio entre o ombro e o cotovelo. Se preferir medir contraído, faça sempre do mesmo jeito.' },
+  bracoE: { line: [90, 70, 6], tip: 'Braço esquerdo solto ao lado do corpo, no meio entre o ombro e o cotovelo. Se preferir medir contraído, faça sempre do mesmo jeito.' },
+  antebraco: { line: [24, 104, 5], tip: 'Na parte mais grossa, logo abaixo do cotovelo, com a mão aberta e o braço solto. Meça sempre o mesmo lado.' },
+  coxaD: { line: [50, 145, 9], tip: 'Em pé, peso igual nas duas pernas. Coxa direita, no meio entre a virilha e o joelho.' },
+  coxaE: { line: [70, 145, 9], tip: 'Em pé, peso igual nas duas pernas. Coxa esquerda, no meio entre a virilha e o joelho.' },
+  panturrilha: { line: [51, 186, 6], tip: 'Em pé, peso igual nas duas pernas, na parte mais grossa da panturrilha. Meça sempre o mesmo lado.' }
+};
+
+function bodySvg(line) {
+  const side = d => d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (m, x, y) => `${120 - x} ${y}`);
+  const arm = 'M37 42 L28 47 L21 92 L30 94 L38 62 Z M21 92 L30 94 L27 136 L19 135 Z';
+  const leg = 'M40 123 L59 123 L57 172 L44 172 Z M44 172 L57 172 L55 212 L47 212 Z';
+  const [cx, cy, rx] = line;
+  return `<svg viewBox="0 0 120 222" class="body-fig" role="img" aria-label="Onde passar a fita">
+    <g fill="#363d4b" stroke="#5c6576" stroke-width="1.2" stroke-linejoin="round">
+      <circle cx="60" cy="19" r="11"/><rect x="55" y="28" width="10" height="11" rx="3"/>
+      <path d="M37 41 Q60 35 83 41 L80 70 Q78 88 76 98 Q80 110 81 125 L39 125 Q40 110 44 98 Q42 88 40 70 Z"/>
+      <path d="${arm}"/><path d="${side(arm)}"/><path d="${leg}"/><path d="${side(leg)}"/>
+    </g>
+    <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${Math.max(2, rx / 6)}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 2"/>
+    <text x="4" y="219" font-size="13" font-weight="700" fill="var(--muted)">D</text><text x="106" y="219" font-size="13" font-weight="700" fill="var(--muted)">E</text>
+  </svg>`;
+}
+
+function measureHelp(key) {
+  const g = COMO_MEDIR[key];
+  if (!g) return '';
+  return `<div class="measure-help">${g.line ? bodySvg(g.line) : ''}<div class="muted">${g.tip}</div></div>`;
+}
+
+function showMeasureGuide() {
+  openModal(`<h3>Como medir</h3>
+    <div class="muted">Fita rente à pele, sem apertar, paralela ao chão. Meça no mesmo horário, de preferência em jejum e antes do treino.
+      Faça cada medida duas vezes e use a média. A linha verde mostra onde passar a fita. D é o seu lado direito e E o esquerdo.</div>
+    ${MEDIDAS.map(m => `<div class="list-item" style="display:block"><strong>${m.label}</strong>${measureHelp(m.key)}</div>`).join('')}`);
+}
+
 function editProfile() {
   const p = state.profile || {};
   const w = lastWeight();
@@ -964,6 +1013,7 @@ function renderMedidas() {
       ? `<div class="muted">Medidas de ${monthLabel(mk)} registradas.</div>`
       : `<div class="hint keep">Você ainda não registrou as medidas de ${monthLabel(mk)}.</div>`}
     <button class="btn primary block" style="margin-top:8px" data-action="new-measure">Registrar medidas</button>
+    <button class="btn block" style="margin-top:8px" data-action="measure-guide">Como medir (com imagens)</button>
     <div class="muted" style="margin-top:8px">Meça sempre no mesmo horário, em jejum, com a fita sem apertar a pele.</div>
   </div>`;
 
@@ -1005,8 +1055,11 @@ function editMeasure(id) {
     <form id="m-form">
       <label>Data</label>
       <input class="field" type="date" name="date" value="${rec ? rec.date : todayISO()}" required>
-      <div class="grid-2">${MEDIDAS.map(m => `<div><label>${m.label} (${m.unit})</label>
-        <input class="field" name="${m.key}" inputmode="decimal" value="${esc(rec?.values[m.key] ?? '')}" placeholder="${last[m.key] != null ? 'último: ' + String(last[m.key]).replace('.', ',') : ''}"></div>`).join('')}</div>
+      <div class="muted" style="margin-top:8px">Toque em <strong>?</strong> para ver onde passar a fita.</div>
+      <div class="grid-2">${MEDIDAS.map(m => `<div><label class="row between" style="gap:4px"><span>${m.label} (${m.unit})</span>
+          <button type="button" class="help-btn" data-action="measure-help" data-key="${m.key}" aria-label="Como medir ${m.label}">?</button></label>
+        <input class="field" name="${m.key}" inputmode="decimal" value="${esc(rec?.values[m.key] ?? '')}" placeholder="${last[m.key] != null ? 'último: ' + String(last[m.key]).replace('.', ',') : ''}">
+        <div class="help-slot" data-slot="${m.key}"></div></div>`).join('')}</div>
       <button class="btn primary block" style="margin-top:14px" type="submit">Salvar</button>
     </form>`);
   document.getElementById('m-form').onsubmit = ev => {
@@ -1476,6 +1529,12 @@ document.addEventListener('click', async ev => {
       break;
     }
     case 'edit-profile': editProfile(); break;
+    case 'measure-guide': showMeasureGuide(); break;
+    case 'measure-help': {
+      const slot = document.querySelector(`[data-slot="${t.dataset.key}"]`);
+      if (slot) slot.innerHTML = slot.innerHTML ? '' : measureHelp(t.dataset.key);
+      break;
+    }
     case 'new-measure': editMeasure(null); break;
     case 'edit-measure': editMeasure(id); break;
     case 'delete-measure':
