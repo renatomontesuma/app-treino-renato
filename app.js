@@ -39,7 +39,7 @@ const ex = (name, muscle, sets, repMin, repMax, rest) =>
 /* Plano inicial: cada grupo muscular treinado 2x por semana. Tudo é editável. */
 function planoInicial() {
   const empurrar = { id: 'empurrar', name: 'Empurrar: peito, ombros e tríceps', exercises: [
-    ex('Supino reto com barra', 'Peito', 4, 6, 10, 120),
+    ex('Supino reto com halteres', 'Peito', 4, 6, 10, 120),
     ex('Supino inclinado com halteres', 'Peito', 3, 8, 12, 90),
     ex('Desenvolvimento com halteres', 'Ombros', 3, 8, 12, 90),
     ex('Elevação lateral', 'Ombros', 3, 12, 15, 60),
@@ -64,7 +64,7 @@ function planoInicial() {
     ex('Panturrilha em pé', 'Panturrilhas', 4, 10, 15, 60)
   ]};
   const superiores = { id: 'superiores', name: 'Superiores', exercises: [
-    ex('Supino inclinado com barra', 'Peito', 3, 8, 12, 120),
+    ex('Supino reto com halteres', 'Peito', 3, 8, 12, 120),
     ex('Crucifixo na polia', 'Peito', 3, 12, 15, 60),
     ex('Barra fixa ou puxada', 'Costas', 3, 6, 10, 120),
     ex('Remada unilateral', 'Costas', 3, 10, 12, 90),
@@ -94,10 +94,11 @@ function planoInicial() {
 }
 
 // Padrão de séries do Renato: 3 séries de 6 a 10 reps. Abdominal na máquina: 5 × 60 sem carga.
-const PLAN_VERSION = 3;
+const PLAN_VERSION = 4;
 
 // Vídeos de referência do YouTube, em português, escolhidos pelo título e pelo canal.
 const VIDEOS_INTERNET = {
+  'Supino reto com halteres': '_80XeL-IBvY',
   'Supino reto com barra': 'TukK2WRI4C4',
   'Supino inclinado com halteres': 'G-i3jMIbDmo',
   'Desenvolvimento com halteres': 'IDOZyXHq7aI',
@@ -141,6 +142,25 @@ function applyVideosV3(st) {
   st.planVersion = 3;
   return st;
 }
+
+// Renato faz os supinos com halteres. Troca as versões com barra pela versão com halteres.
+const SUPINO_HALTERES = { 'Supino reto com barra': 'Supino reto com halteres', 'Supino inclinado com barra': 'Supino reto com halteres' };
+function applySupinoV4(st) {
+  st.workouts.forEach(w => w.exercises.forEach(e => {
+    const novo = SUPINO_HALTERES[e.name];
+    if (!novo) return;
+    const oldDefault = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET[e.name]}`;
+    // Carga com barra não se compara com carga por halter: o histórico com barra fica separado e o novo começa do zero.
+    (st.logs || []).forEach(l => l.entries.forEach(en => { if (en.exId === e.id) en.exId = 'barra_' + e.id; }));
+    e.name = novo;
+    if (!e.videoUrl || e.videoUrl === oldDefault) e.videoUrl = `https://www.youtube.com/watch?v=${VIDEOS_INTERNET[novo]}`;
+  }));
+  st.workouts.forEach(w => w.exercises.forEach(e => {
+    if (/halteres/i.test(e.name) && /supino/i.test(e.name) && !e.notes) e.notes = 'Registre o peso de cada halter.';
+  }));
+  st.planVersion = 4;
+  return st;
+}
 const isAbMachine = e => /abdominal/i.test(e.name) && /m[aá]quina|polia/i.test(e.name);
 function applyPlanV2(st) {
   st.workouts.forEach(w => {
@@ -167,10 +187,11 @@ function load() {
       const st = { focus: {}, measures: [], sources: [], ...JSON.parse(raw) };
       if ((st.planVersion || 1) < 2 && !st.active) applyPlanV2(st);
       if ((st.planVersion || 1) === 2) applyVideosV3(st);
+      if ((st.planVersion || 1) === 3 && !st.active) applySupinoV4(st);
       return st;
     }
   } catch (e) { /* segue com o plano inicial */ }
-  return applyVideosV3(applyPlanV2(planoInicial()));
+  return applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())));
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -1256,7 +1277,7 @@ document.addEventListener('click', async ev => {
     case 'reset':
       if (confirm('Restaurar o plano inicial? Seus treinos editados serão substituídos. O histórico é mantido.')) {
         const logs = state.logs;
-        state = applyVideosV3(applyPlanV2(planoInicial()));
+        state = applySupinoV4(applyVideosV3(applyPlanV2(planoInicial())));
         state.logs = logs;
         save(); render();
       }
